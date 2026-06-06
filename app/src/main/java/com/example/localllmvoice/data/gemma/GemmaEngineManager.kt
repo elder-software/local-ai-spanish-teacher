@@ -69,6 +69,11 @@ class GemmaEngineManager(
     suspend fun createConversation(
         systemPrompt: String,
         initialMessages: List<Message> = emptyList(),
+        samplerConfig: SamplerConfig = SamplerConfig(
+            topK = GemmaModelConfig.SAMPLER_TOP_K,
+            topP = GemmaModelConfig.SAMPLER_TOP_P,
+            temperature = GemmaModelConfig.SAMPLER_TEMPERATURE,
+        ),
     ): Conversation {
         val activeEngine = mutex.withLock {
             engine ?: throw IllegalStateException("Engine not initialized")
@@ -77,11 +82,7 @@ class GemmaEngineManager(
             ConversationConfig(
                 systemInstruction = Contents.of(systemPrompt),
                 initialMessages = initialMessages,
-                samplerConfig = SamplerConfig(
-                    topK = GemmaModelConfig.SAMPLER_TOP_K,
-                    topP = GemmaModelConfig.SAMPLER_TOP_P,
-                    temperature = GemmaModelConfig.SAMPLER_TEMPERATURE,
-                ),
+                samplerConfig = samplerConfig,
                 automaticToolCalling = false,
                 channels = emptyList(),
             ),

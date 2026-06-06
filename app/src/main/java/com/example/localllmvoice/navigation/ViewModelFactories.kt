@@ -6,6 +6,7 @@ import com.example.localllmvoice.di.AppContainer
 import com.example.localllmvoice.domain.model.ConversationTopic
 import com.example.localllmvoice.ui.chat.ChatViewModel
 import com.example.localllmvoice.ui.dashboard.DashboardViewModel
+import com.example.localllmvoice.ui.feedback.FeedbackViewModel
 
 class DashboardViewModelFactory(
     private val appContainer: AppContainer,
@@ -31,6 +32,22 @@ class ChatViewModelFactory(
                 llmRepository = appContainer.llmRepository(),
                 speechToTextManager = appContainer.speechToTextManager,
                 textToSpeechManager = appContainer.textToSpeechManager,
+                feedbackSessionStore = appContainer.feedbackSessionStore,
+            ) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+class FeedbackViewModelFactory(
+    private val appContainer: AppContainer,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(FeedbackViewModel::class.java)) {
+            return FeedbackViewModel(
+                llmRepository = appContainer.llmRepository(),
+                feedbackSessionStore = appContainer.feedbackSessionStore,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

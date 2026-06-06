@@ -43,13 +43,10 @@ import com.example.localllmvoice.ui.components.ChatMessageList
 fun ChatScreen(
     viewModel: ChatViewModel,
     onNavigateBack: () -> Unit,
+    onEndChat: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val leaveChat = {
-        viewModel.endConversation()
-        onNavigateBack()
-    }
 
     when (val state = uiState) {
         ChatUiState.Initializing -> {
@@ -64,8 +61,8 @@ fun ChatScreen(
         is ChatUiState.ActiveConversation -> {
             ActiveChatContent(
                 state = state,
-                onNavigateBack = leaveChat,
-                onEndChat = leaveChat,
+                onNavigateBack = onNavigateBack,
+                onEndChat = onEndChat,
                 onToggleRecording = viewModel::toggleRecording,
                 onDismissError = viewModel::dismissError,
                 modifier = modifier,

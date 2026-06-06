@@ -41,4 +41,20 @@ class DemoLlmRepositoryTest {
                 )
             }
     }
+
+    @Test
+    fun analyzeConversationReturnsSpanishFeedbackWithoutThinkMarkers() = runBlocking {
+        val response = StringBuilder()
+
+        repository.analyzeConversation(
+            """
+                Partner: ¡Buenas tardes! ¿Qué te gustaría beber?
+                Learner: Yo quiero una cerveza por favor.
+            """.trimIndent(),
+        ).collect { response.append(it) }
+
+        val report = response.toString()
+        assertTrue(report.isNotBlank())
+        assertTrue(report.contains("conversación", ignoreCase = true))
+    }
 }

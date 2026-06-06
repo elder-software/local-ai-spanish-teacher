@@ -15,10 +15,13 @@ import com.example.localllmvoice.ui.chat.ChatScreen
 import com.example.localllmvoice.ui.chat.ChatViewModel
 import com.example.localllmvoice.ui.dashboard.DashboardScreen
 import com.example.localllmvoice.ui.dashboard.DashboardViewModel
+import com.example.localllmvoice.ui.feedback.FeedbackScreen
+import com.example.localllmvoice.ui.feedback.FeedbackViewModel
 
 object Routes {
     const val DASHBOARD = "dashboard"
     const val CHAT = "chat/{topicId}"
+    const val FEEDBACK = "feedback"
 
     fun chat(topicId: String) = "chat/$topicId"
 }
@@ -65,7 +68,31 @@ fun SoloTalkNavHost(
             )
             ChatScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() },
+                onNavigateBack = {
+                    viewModel.endConversation()
+                    navController.popBackStack()
+                },
+                onEndChat = {
+                    val hasFeedback = viewModel.prepareFeedback()
+                    viewModel.endConversation()
+                    if (hasFeedback) {
+                        navController.navigate(Routes.FEEDBACK) {
+                            popUpTo(Routes.CHAT) { inclusive = true }
+                        }
+                    } else {
+                        navController.popBackStack()
+                    }
+                },
+            )
+        }
+
+        composable(Routes.FEEDBACK) {
+            val viewModel: FeedbackViewModel = viewModel(
+                factory = FeedbackViewModelFactory(appContainer),
+            )
+            FeedbackScreen(
+                viewModel = viewModel,
+                onDone = { navController.popBackStack() },
             )
         }
     }

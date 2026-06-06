@@ -7,13 +7,16 @@ import com.example.localllmvoice.data.gemma.GemmaEngineManager
 import com.example.localllmvoice.data.gemma.GemmaModelConfig
 import com.example.localllmvoice.data.gemma.GemmaModelDownloader
 import com.example.localllmvoice.data.gemma.GemmaModelStore
+import com.example.localllmvoice.domain.model.FeedbackPrompt
 import com.example.localllmvoice.domain.parser.RepetitionDetector
+import com.example.localllmvoice.domain.parser.GemmaStreamParser
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ExperimentalApi
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.Role
+import com.google.ai.edge.litertlm.SamplerConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -186,10 +189,53 @@ class GemmaLlmRepository(
         }
     }.flowOn(Dispatchers.Default)
 
+    override fun analyzeConversation(transcript: String): Flow<String> = flow {
+        conversationMutex.withLock {
+            modelStore.resolveEngineModelPath().getOrThrow()
+            val userContents = Contents.of(Content.Text(transcript))
+            val analysisSampler = SamplerConfig(
+                topK = GemmaModelConfig.ANALYSIS_SAMPLER_TOP_K,
+                topP = GemmaModelConfig.ANALYSIS_SAMPLER_TOP_P,
+                temperature = GemmaModelConfig.ANALYSIS_SAMPLER_TEMPERATURE,
+            )
+            val conversation = replaceActiveConversation(
+                systemPrompt = FeedbackPrompt.buildAnalysisSystemPrompt(),
+                initialMessages = emptyList(),
+                samplerConfig = analysisSampler,
+            )
+
+            try {
+                var previousText = ""
+                val parser = GemmaStreamParser()
+
+                conversation.sendMessageAsync(userContents).collect { message ->
+                    val text = stripLeadingAssistantLabel(message.textContent())
+                    val delta = if (text.startsWith(previousText)) {
+                        text.removePrefix(previousText)
+                    } else {
+                        text
+                    }
+                    previousText = text
+                    val visibleText = StringBuilder()
+                    parser.processToken(delta) { visible ->
+                        if (visible.isNotEmpty()) {
+                            visibleText.append(visible)
+                        }
+                    }
+                    if (visibleText.isNotEmpty()) {
+                        emit(visibleText.toString())
+                    }
+                }
+            } catch (e: CancellationException) {
+                runCatching { conversation.cancelProcess() }
+                throw e
+            }
+        }
+    }.flowOn(Dispatchers.Default)
+
     override suspend fun resetConversation() {
         conversationMutex.withLock {
-            runCatching { activeConversation?.close() }
-            activeConversation = null
+            closeActiveConversation()
         }
     }
 
@@ -197,13 +243,35 @@ class GemmaLlmRepository(
         systemPrompt: String,
         conversationContext: String,
     ): Conversation = conversationMutex.withLock {
-        runCatching { activeConversation?.close() }
-        engineManager.createConversation(
+        replaceActiveConversation(
             systemPrompt = systemPrompt,
             initialMessages = parseConversationHistory(conversationContext),
+        )
+    }
+
+    private suspend fun replaceActiveConversation(
+        systemPrompt: String,
+        initialMessages: List<Message> = emptyList(),
+        samplerConfig: SamplerConfig = SamplerConfig(
+            topK = GemmaModelConfig.SAMPLER_TOP_K,
+            topP = GemmaModelConfig.SAMPLER_TOP_P,
+            temperature = GemmaModelConfig.SAMPLER_TEMPERATURE,
+        ),
+    ): Conversation {
+        closeActiveConversation()
+        return engineManager.createConversation(
+            systemPrompt = systemPrompt,
+            initialMessages = initialMessages,
+            samplerConfig = samplerConfig,
         ).also { conversation ->
             activeConversation = conversation
         }
+    }
+
+    private fun closeActiveConversation() {
+        runCatching { activeConversation?.cancelProcess() }
+        runCatching { activeConversation?.close() }
+        activeConversation = null
     }
 
     private fun parseConversationHistory(conversationContext: String): List<Message> {

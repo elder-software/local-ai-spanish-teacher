@@ -42,4 +42,28 @@ class GemmaStreamParserTest {
         assertEquals("internal note", thoughts.filterNotNull().single())
         assertEquals("Bien.  ¿Quieres practicar más?", visible.toString())
     }
+
+    @Test
+    fun channelHeader_hiddenFromVisible() {
+        val parser = GemmaStreamParser()
+        val visible = StringBuilder()
+
+        assertNull(parser.processToken("<|channel|>final") { visible.append(it) })
+        assertNull(parser.processToken("Hola, ") { visible.append(it) })
+        assertNull(parser.processToken("¿qué tal?") { visible.append(it) })
+
+        assertEquals("Hola, ¿qué tal?", visible.toString())
+    }
+
+    @Test
+    fun splitChannelHeader_hiddenFromVisible() {
+        val parser = GemmaStreamParser()
+        val visible = StringBuilder()
+
+        assertNull(parser.processToken("<|chan") { visible.append(it) })
+        assertNull(parser.processToken("nel|>finalBuen") { visible.append(it) })
+        assertNull(parser.processToken(" trabajo.") { visible.append(it) })
+
+        assertEquals("Buen trabajo.", visible.toString())
+    }
 }

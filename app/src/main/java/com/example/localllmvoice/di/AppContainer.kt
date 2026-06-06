@@ -9,6 +9,7 @@ import com.example.localllmvoice.data.audio.TextToSpeechManager
 import com.example.localllmvoice.data.repository.DemoLlmRepository
 import com.example.localllmvoice.data.repository.GemmaLlmRepository
 import com.example.localllmvoice.data.repository.LlmRepository
+import com.example.localllmvoice.domain.model.FeedbackSessionStore
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -20,6 +21,7 @@ class AppContainer(context: Context) {
 
     val speechToTextManager: SpeechToTextEngine = createSpeechToTextManager()
     val textToSpeechManager = TextToSpeechManager(appContext)
+    val feedbackSessionStore = FeedbackSessionStore()
 
     fun llmRepository(): LlmRepository =
         if (practiceModeEnabled) demoLlmRepository else gemmaLlmRepository

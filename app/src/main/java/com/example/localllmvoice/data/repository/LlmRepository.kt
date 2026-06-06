@@ -40,5 +40,7 @@ interface LlmRepository {
         userText: String,
     ): Flow<String>
 
+    fun analyzeConversation(transcript: String): Flow<String>
+
     suspend fun resetConversation()
 }

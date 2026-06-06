@@ -13,7 +13,7 @@ class GemmaStreamParser {
 
     /**
      * Parses streaming tokens sequentially.
-     * Extracts text inside <|think|> tags without leaking them to the user or TTS.
+     * Hides Gemma control markers (think blocks, channel/turn headers) from user-visible output.
      */
     fun processToken(token: String, onUserVisibleText: (String) -> Unit): String? {
         pendingBuffer.append(token)
@@ -38,16 +38,19 @@ class GemmaStreamParser {
                     break
                 }
             } else {
-                val startIndex = pendingBuffer.indexOf(THINK_START)
-                if (startIndex >= 0) {
-                    val visible = pendingBuffer.substring(0, startIndex)
+                val controlMarker = findEarliestControlMarker()
+                if (controlMarker != null) {
+                    val visible = pendingBuffer.substring(0, controlMarker.startIndex)
                     if (visible.isNotEmpty()) {
                         onUserVisibleText(visible)
                     }
-                    pendingBuffer.delete(0, startIndex + THINK_START.length)
-                    isInsideThinkBlock = true
+                    pendingBuffer.delete(0, controlMarker.endIndexExclusive)
+
+                    if (controlMarker.kind == ControlMarkerKind.THINK_BLOCK) {
+                        isInsideThinkBlock = true
+                    }
                 } else {
-                    val retainLength = pendingBuffer.longestSuffixMatchingPrefixOf(THINK_START)
+                    val retainLength = longestControlPrefixRetainLength()
                     val visibleLength = pendingBuffer.length - retainLength
                     if (visibleLength > 0) {
                         onUserVisibleText(pendingBuffer.substring(0, visibleLength))
@@ -59,6 +62,79 @@ class GemmaStreamParser {
         }
 
         return completedThought
+    }
+
+    private fun findEarliestControlMarker(): ControlMarker? =
+        CONTROL_MARKERS
+            .mapNotNull { marker ->
+                val startIndex = pendingBuffer.indexOf(marker.token)
+                if (startIndex < 0) {
+                    null
+                } else {
+                    val suffixLength = when (marker.kind) {
+                        ControlMarkerKind.THINK_BLOCK -> 0
+                        ControlMarkerKind.CHANNEL_HEADER ->
+                            pendingBuffer.knownNameLengthAt(
+                                startIndex = startIndex + marker.token.length,
+                                knownNames = CHANNEL_NAMES,
+                            )
+                        ControlMarkerKind.TURN_HEADER ->
+                            pendingBuffer.knownNameLengthAt(
+                                startIndex = startIndex + marker.token.length,
+                                knownNames = TURN_NAMES,
+                            )
+                    }
+                    ControlMarker(
+                        kind = marker.kind,
+                        startIndex = startIndex,
+                        endIndexExclusive = startIndex + marker.token.length + suffixLength,
+                    )
+                }
+            }
+            .minByOrNull { it.startIndex }
+
+    private fun StringBuilder.knownNameLengthAt(
+        startIndex: Int,
+        knownNames: List<String>,
+    ): Int {
+        if (startIndex >= length) {
+            return trailingWhitespaceLengthAt(startIndex)
+        }
+
+        val matchedName = knownNames.firstOrNull { startsWithAt(startIndex, it) }
+        return if (matchedName != null) {
+            matchedName.length + trailingWhitespaceLengthAt(startIndex + matchedName.length)
+        } else {
+            trailingWhitespaceLengthAt(startIndex)
+        }
+    }
+
+    private fun StringBuilder.trailingWhitespaceLengthAt(startIndex: Int): Int {
+        var whitespaceLength = 0
+        while (startIndex + whitespaceLength < length) {
+            val char = this[startIndex + whitespaceLength]
+            if (!char.isWhitespace()) {
+                break
+            }
+            whitespaceLength += 1
+        }
+        return whitespaceLength
+    }
+
+    private fun StringBuilder.startsWithAt(startIndex: Int, value: String): Boolean {
+        if (startIndex + value.length > length) {
+            return false
+        }
+        return substring(startIndex, startIndex + value.length) == value
+    }
+
+    private fun longestControlPrefixRetainLength(): Int {
+        val prefixes = buildList {
+            add(THINK_START)
+            add(THINK_END)
+            CONTROL_MARKERS.forEach { add(it.token) }
+        }
+        return prefixes.maxOf { pendingBuffer.longestSuffixMatchingPrefixOf(it) }
     }
 
     private fun StringBuilder.longestSuffixMatchingPrefixOf(value: String): Int {
@@ -77,8 +153,36 @@ class GemmaStreamParser {
     private fun StringBuilder.endsWith(value: String): Boolean =
         length >= value.length && substring(length - value.length, length) == value
 
+    private enum class ControlMarkerKind {
+        THINK_BLOCK,
+        CHANNEL_HEADER,
+        TURN_HEADER,
+    }
+
+    private data class ControlMarker(
+        val kind: ControlMarkerKind,
+        val startIndex: Int,
+        val endIndexExclusive: Int,
+    )
+
+    private data class ControlMarkerPattern(
+        val kind: ControlMarkerKind,
+        val token: String,
+    )
+
     companion object {
         private const val THINK_START = "<|think|>"
         private const val THINK_END = "</|think|>"
+
+        private val CONTROL_MARKERS = listOf(
+            ControlMarkerPattern(ControlMarkerKind.THINK_BLOCK, THINK_START),
+            ControlMarkerPattern(ControlMarkerKind.CHANNEL_HEADER, "<|channel|>"),
+            ControlMarkerPattern(ControlMarkerKind.CHANNEL_HEADER, "<channel|>"),
+            ControlMarkerPattern(ControlMarkerKind.TURN_HEADER, "<|turn|>"),
+            ControlMarkerPattern(ControlMarkerKind.TURN_HEADER, "<turn|>"),
+        )
+
+        private val CHANNEL_NAMES = listOf("final", "analysis", "commentary")
+        private val TURN_NAMES = listOf("model", "user")
     }
 }

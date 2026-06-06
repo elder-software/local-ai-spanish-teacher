@@ -27,6 +27,10 @@ object GemmaModelConfig {
     const val SAMPLER_TOP_P = 0.95
     const val SAMPLER_TEMPERATURE = 1.0
 
+    const val ANALYSIS_SAMPLER_TOP_K = 40
+    const val ANALYSIS_SAMPLER_TOP_P = 0.9
+    const val ANALYSIS_SAMPLER_TEMPERATURE = 0.3
+
     val ESTIMATED_SIZE_MB: Long
         get() = ESTIMATED_SIZE_BYTES / 1_000_000
 }

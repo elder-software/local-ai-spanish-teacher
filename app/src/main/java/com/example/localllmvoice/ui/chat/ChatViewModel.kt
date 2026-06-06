@@ -8,6 +8,8 @@ import com.example.localllmvoice.data.audio.TextToSpeechManager
 import com.example.localllmvoice.data.repository.LlmRepository
 import com.example.localllmvoice.domain.model.ChatMessage
 import com.example.localllmvoice.domain.model.ConversationTopic
+import com.example.localllmvoice.domain.model.FeedbackSession
+import com.example.localllmvoice.domain.model.FeedbackSessionStore
 import com.example.localllmvoice.domain.parser.GemmaStreamParser
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,11 +23,13 @@ class ChatViewModel(
     private val llmRepository: LlmRepository,
     private val speechToTextManager: SpeechToTextEngine,
     private val textToSpeechManager: TextToSpeechManager,
+    private val feedbackSessionStore: FeedbackSessionStore,
 ) : ViewModel() {
     private val streamParser = GemmaStreamParser()
     private var generationJob: Job? = null
     private var recognitionJob: Job? = null
     private var systemPrompt: String = topic.systemPrompt
+    private var handingOffToFeedback = false
 
     private val _uiState = MutableStateFlow<ChatUiState>(
         ChatUiState.Initializing,
@@ -70,9 +74,27 @@ class ChatViewModel(
         generationJob?.cancel()
         recognitionJob?.cancel()
         textToSpeechManager.stop()
-        viewModelScope.launch {
-            llmRepository.resetConversation()
+        if (!handingOffToFeedback) {
+            viewModelScope.launch {
+                llmRepository.resetConversation()
+            }
         }
+    }
+
+    fun prepareFeedback(): Boolean {
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return false
+        if (state.messages.none { it.isUser }) {
+            return false
+        }
+
+        feedbackSessionStore.set(
+            FeedbackSession(
+                topicTitle = state.currentTopic,
+                transcript = formatConversationContext(state.messages),
+            ),
+        )
+        handingOffToFeedback = true
+        return true
     }
 
     fun dismissError() {
@@ -86,8 +108,10 @@ class ChatViewModel(
         generationJob?.cancel()
         recognitionJob?.cancel()
         textToSpeechManager.stop()
-        runBlocking {
-            llmRepository.resetConversation()
+        if (!handingOffToFeedback) {
+            runBlocking {
+                llmRepository.resetConversation()
+            }
         }
         super.onCleared()
     }

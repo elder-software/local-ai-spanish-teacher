@@ -36,6 +36,14 @@ class DemoLlmRepository : LlmRepository {
         }
     }
 
+    override fun analyzeConversation(transcript: String): Flow<String> = flow {
+        val report = buildDemoAnalysisReport(transcript)
+        for (char in report) {
+            emit(char.toString())
+            delay(12)
+        }
+    }
+
     override suspend fun resetConversation() = Unit
 
     private fun buildDemoReply(systemPrompt: String, conversationContext: String): String {
@@ -114,5 +122,15 @@ class DemoLlmRepository : LlmRepository {
             )
         }
         return replies[turnCount % replies.size]
+    }
+
+    private fun buildDemoAnalysisReport(transcript: String): String {
+        return """
+            Lo hiciste bien manteniendo el hilo de la conversación y respondiendo con frases completas.
+
+            Revisa la concordancia de género y número, y los tiempos verbales cuando hablas del pasado o del futuro. Por ejemplo, "yo voy" suena más natural que construcciones forzadas con el infinitivo.
+
+            Sigue usando conectores sencillos como "porque", "pero" y "entonces" para que suene más fluido.
+        """.trimIndent()
     }
 }
