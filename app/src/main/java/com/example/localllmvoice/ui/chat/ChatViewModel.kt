@@ -28,6 +28,7 @@ class ChatViewModel(
     private val streamParser = GemmaStreamParser()
     private var generationJob: Job? = null
     private var recognitionJob: Job? = null
+    private var discardPendingTranscript = false
     private var systemPrompt: String = topic.systemPrompt
     private var handingOffToFeedback = false
 
@@ -68,6 +69,18 @@ class ChatViewModel(
         } else {
             startListening(state)
         }
+    }
+
+    fun cancelVoiceInput() {
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        if (!state.isRecording) return
+
+        discardPendingTranscript = true
+        speechToTextManager.stopListening()
+        _uiState.value = state.copy(
+            isRecording = false,
+            interimTranscript = null,
+        )
     }
 
     fun endConversation() {
@@ -117,6 +130,7 @@ class ChatViewModel(
     }
 
     private fun startListening(state: ChatUiState.ActiveConversation) {
+        if (recognitionJob?.isActive == true) return
         if (!speechToTextManager.hasRecordPermission()) {
             _uiState.value = state.copy(errorMessage = "Microphone permission not granted")
             return
@@ -129,6 +143,7 @@ class ChatViewModel(
         }
 
         textToSpeechManager.stop()
+        discardPendingTranscript = false
         _uiState.value = state.copy(
             isRecording = true,
             interimTranscript = "",
@@ -137,12 +152,33 @@ class ChatViewModel(
 
         recognitionJob?.cancel()
         recognitionJob = viewModelScope.launch {
-            speechToTextManager.transcribe(RECOGNITION_LANGUAGE).collect { event ->
-                when (event) {
-                    is SttEvent.Partial -> updateInterim(event.text)
-                    is SttEvent.Final -> respondToTranscript(event.text)
-                    is SttEvent.Failure -> handleRecognitionFailure(event.message)
+            try {
+                speechToTextManager.transcribe(RECOGNITION_LANGUAGE).collect { event ->
+                    when (event) {
+                        is SttEvent.Partial -> {
+                            if (!discardPendingTranscript) {
+                                updateInterim(event.text)
+                            }
+                        }
+                        is SttEvent.Final -> {
+                            if (discardPendingTranscript) {
+                                discardPendingTranscript = false
+                            } else {
+                                respondToTranscript(event.text)
+                            }
+                        }
+                        is SttEvent.Failure -> {
+                            if (discardPendingTranscript) {
+                                discardPendingTranscript = false
+                            } else {
+                                handleRecognitionFailure(event.message)
+                            }
+                        }
+                    }
                 }
+            } finally {
+                recognitionJob = null
+                discardPendingTranscript = false
             }
         }
     }
