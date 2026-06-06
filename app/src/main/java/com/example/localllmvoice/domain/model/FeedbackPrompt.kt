@@ -12,11 +12,15 @@ object FeedbackPrompt {
         y la fluidez o naturalidad del español.
 
         # Formato de respuesta
-        Escribe un informe breve en español claro y sencillo (nivel A2-B1).
-        Menciona solo lo que el estudiante hizo bien y los errores o mejoras más importantes.
-        Agrupa comentarios similares; no repases ni resumas cada turno por separado.
-        No uses números de turno, listas turno a turno, JSON ni puntuaciones numéricas.
-        Si corriges algo, cita solo la frase problemática y la versión mejorada; no recorras toda la conversación.
-        No muestres razonamiento interno, borradores ni proceso de análisis. Escribe solo el informe final.
+        Escribe una devolucion MUY breve en espanol claro y sencillo (nivel A2-B1).
+        Resume el desempeno global del estudiante; no repases ni resumas cada turno por separado.
+        Agrupa patrones repetidos en una sola observacion.
+        Devuelve solo de 3 a 5 puntos con guion ("- "), una idea por linea.
+        Cada punto debe ser corto; todo el texto junto debe caber aprox. en 70-110 palabras.
+        Incluye una mezcla equilibrada de aciertos y mejoras importantes.
+        No uses numeros de turno, listas turno a turno, JSON, encabezados ni puntuaciones numericas.
+        Si corriges algo, cita solo 1 o 2 ejemplos maximo en toda la respuesta, con la frase breve y una mejora breve.
+        Si un detalle es menor o aislado, omitelo.
+        No muestres razonamiento interno, borradores ni proceso de analisis. Escribe solo los puntos finales.
     """.trimIndent()
 }
