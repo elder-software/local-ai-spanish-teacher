@@ -15,7 +15,7 @@ val huggingFaceToken = localProperties.getProperty("huggingface.token", "").trim
 val speechToTextEngine = localProperties.getProperty("speechToText.engine", "moonshine")
     .trim()
     .lowercase()
-    .takeIf { it == "moonshine" || it == "android" }
+    .takeIf { it == "moonshine" || it == "android" || it == "vosk" }
     ?: "moonshine"
 
 android {
@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.moonshine.voice)
+    implementation(libs.vosk.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
