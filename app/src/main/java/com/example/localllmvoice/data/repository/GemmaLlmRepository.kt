@@ -231,53 +231,47 @@ class GemmaLlmRepository(
         }
     }.flowOn(Dispatchers.Default)
 
-    override suspend fun punctuateTranscript(transcript: String): String = conversationMutex.withLock {
+    override suspend fun punctuateTranscript(transcript: String): String {
         val rawTranscript = transcript.trim()
-        if (rawTranscript.isEmpty()) return@withLock rawTranscript
+        if (rawTranscript.isEmpty()) return rawTranscript
 
-        val modelPath = modelStore.resolveEngineModelPath().getOrThrow()
-        engineManager.initialize(modelPath)
-        val punctuateSampler = SamplerConfig(
-            topK = 20,
-            topP = 0.8,
-            temperature = 0.2,
-        )
+        return conversationMutex.withLock {
+            val modelPath = modelStore.resolveEngineModelPath().getOrThrow()
+            engineManager.initialize(modelPath)
+            val punctuateSampler = SamplerConfig(
+                topK = 20,
+                topP = 0.8,
+                temperature = 0.2,
+            )
+            val conversation = replaceActiveConversation(
+                systemPrompt = TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT,
+                samplerConfig = punctuateSampler,
+            )
 
-        // Punctuation is a one-off side pass, so clear any prior chat conversation and recreate
-        // the real chat conversation from rendered history on the next generation turn.
-        closeActiveConversation()
-        val conversation = engineManager.createConversation(
-            systemPrompt = TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT,
-            samplerConfig = punctuateSampler,
-        )
+            try {
+                val parser = GemmaStreamParser()
+                var previousText = ""
+                val punctuated = StringBuilder()
 
-        try {
-            val parser = GemmaStreamParser()
-            var previousText = ""
-            val punctuated = StringBuilder()
-
-            conversation.sendMessageAsync(Contents.of(Content.Text(rawTranscript))).collect { message ->
-                val text = stripLeadingAssistantLabel(message.textContent())
-                val delta = if (text.startsWith(previousText)) {
-                    text.removePrefix(previousText)
-                } else {
-                    text
-                }
-                previousText = text
-                parser.processToken(delta) { visible ->
-                    if (visible.isNotEmpty()) {
-                        punctuated.append(visible)
+                conversation.sendMessageAsync(Contents.of(Content.Text(rawTranscript))).collect { message ->
+                    val text = stripLeadingAssistantLabel(message.textContent())
+                    val delta = if (text.startsWith(previousText)) {
+                        text.removePrefix(previousText)
+                    } else {
+                        text
+                    }
+                    previousText = text
+                    parser.processToken(delta) { visible ->
+                        if (visible.isNotEmpty()) {
+                            punctuated.append(visible)
+                        }
                     }
                 }
-            }
 
-            punctuated.toString().trim().ifEmpty { rawTranscript }
-        } catch (e: CancellationException) {
-            runCatching { conversation.cancelProcess() }
-            throw e
-        } finally {
-            runCatching { conversation.cancelProcess() }
-            runCatching { conversation.close() }
+                punctuated.toString().trim().ifEmpty { rawTranscript }
+            } finally {
+                closeActiveConversation()
+            }
         }
     }
 
