@@ -80,6 +80,7 @@ class ChatViewModel(
         _uiState.value = state.copy(
             isRecording = false,
             interimTranscript = null,
+            inputLevel = 0f,
         )
     }
 
@@ -147,6 +148,7 @@ class ChatViewModel(
         _uiState.value = state.copy(
             isRecording = true,
             interimTranscript = "",
+            inputLevel = 0f,
             errorMessage = null,
         )
 
@@ -158,6 +160,11 @@ class ChatViewModel(
                         is SttEvent.Partial -> {
                             if (!discardPendingTranscript) {
                                 updateInterim(event.text)
+                            }
+                        }
+                        is SttEvent.AudioLevel -> {
+                            if (!discardPendingTranscript) {
+                                updateInputLevel(event.rms)
                             }
                         }
                         is SttEvent.Final -> {
@@ -187,6 +194,12 @@ class ChatViewModel(
         val current = _uiState.value as? ChatUiState.ActiveConversation ?: return
         if (!current.isRecording) return
         _uiState.value = current.copy(interimTranscript = text)
+    }
+
+    private fun updateInputLevel(rms: Float) {
+        val current = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        if (!current.isRecording) return
+        _uiState.value = current.copy(inputLevel = rms)
     }
 
     private fun handleRecognitionFailure(message: String) {

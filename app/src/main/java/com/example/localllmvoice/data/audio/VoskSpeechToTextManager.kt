@@ -127,6 +127,7 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
 
         val startResult = audioRecorder.start { chunk ->
             pcmChunks.trySend(chunk)
+            trySend(SttEvent.AudioLevel(computeNormalizedRms(chunk)))
         }
         if (startResult.isFailure) {
             pcmChunks.close()
@@ -217,6 +218,23 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
 
     private fun parseVoskText(json: String, field: String): String =
         JSONObject(json).optString(field).trim()
+
+    /** Root-mean-square amplitude of a PCM16 little-endian chunk, normalised to 0f..1f. */
+    private fun computeNormalizedRms(chunk: ByteArray): Float {
+        val sampleCount = chunk.size / 2
+        if (sampleCount == 0) return 0f
+        var sumSquares = 0.0
+        var index = 0
+        while (index + 1 < chunk.size) {
+            val low = chunk[index].toInt() and 0xFF
+            val high = chunk[index + 1].toInt()
+            val sample = (low or (high shl 8)).toShort().toInt()
+            sumSquares += (sample.toDouble() * sample.toDouble())
+            index += 2
+        }
+        val rms = kotlin.math.sqrt(sumSquares / sampleCount)
+        return (rms / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
+    }
 
     companion object {
         private const val TAG = "VoskSpeechToTextManager"

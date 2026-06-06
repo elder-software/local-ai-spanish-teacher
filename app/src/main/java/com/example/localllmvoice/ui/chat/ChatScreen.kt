@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -31,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -47,6 +49,11 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.localllmvoice.ui.components.ChatMessageList
+import kotlin.math.log10
+import kotlin.math.roundToInt
+
+// Bottom of the meter's dynamic range in dBFS; 0 dB is full-scale PCM16.
+private const val METER_FLOOR_DB = -60f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -161,11 +168,9 @@ private fun ActiveChatContent(
                         enter = slideInHorizontally(tween(200)) { -it / 6 } + fadeIn(tween(200)),
                         exit = slideOutHorizontally(tween(160)) { -it / 6 } + fadeOut(tween(160)),
                     ) {
-                        val interim = state.interimTranscript?.takeIf { it.isNotBlank() }
-                        Text(
-                            text = interim ?: "Listening…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        MicDebugPanel(
+                            inputLevel = state.inputLevel,
+                            heardText = state.interimTranscript,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                     }
@@ -190,6 +195,67 @@ private fun ActiveChatContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MicDebugPanel(
+    inputLevel: Float,
+    heardText: String?,
+    modifier: Modifier = Modifier,
+) {
+    // Speech sits low on a linear scale, so map RMS onto a dBFS range for a readable meter.
+    val dbfs = if (inputLevel > 0f) 20f * log10(inputLevel) else METER_FLOOR_DB
+    val displayLevel = ((dbfs - METER_FLOOR_DB) / -METER_FLOOR_DB).coerceIn(0f, 1f)
+    val animatedLevel by animateFloatAsState(
+        targetValue = displayLevel,
+        animationSpec = tween(120),
+        label = "mic_level",
+    )
+    val heard = heardText?.takeIf { it.isNotBlank() }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp,
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Mic input",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = if (inputLevel > 0f) "${dbfs.roundToInt()} dB" else "-∞ dB",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { animatedLevel },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+            )
+
+            Text(
+                text = heard ?: "Listening…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (heard != null) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
     }
 }

@@ -12,5 +12,6 @@ sealed interface ChatUiState {
         val currentTopic: String,
         val interimTranscript: String? = null,
         val errorMessage: String? = null,
+        val inputLevel: Float = 0f,
     ) : ChatUiState
 }

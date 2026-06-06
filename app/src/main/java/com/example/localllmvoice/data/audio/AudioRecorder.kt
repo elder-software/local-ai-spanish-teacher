@@ -6,6 +6,11 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AudioEffect
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
+import android.util.Log
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +29,7 @@ class AudioRecorder(private val context: Context) {
     private var audioRecord: AudioRecord? = null
     private var recordingJob: Job? = null
     private val pcmBuffer = ByteArrayOutputStream()
+    private val audioEffects = mutableListOf<AudioEffect>()
 
     val isRecording: Boolean
         get() = audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING
@@ -48,7 +54,9 @@ class AudioRecorder(private val context: Context) {
         }
 
         val record = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
+            // VOICE_RECOGNITION is tuned for ASR: it applies speech-optimized pre-processing
+            // and avoids the aggressive, music-oriented AGC that the generic MIC source uses.
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
@@ -58,6 +66,8 @@ class AudioRecorder(private val context: Context) {
             record.release()
             return@withContext Result.failure(IllegalStateException("AudioRecord failed to initialize"))
         }
+
+        enableAudioEffects(record.audioSessionId)
 
         record.startRecording()
         recorderMutex.withLock {
@@ -124,11 +134,58 @@ class AudioRecorder(private val context: Context) {
             runCatching { record.stop() }
         }
         job?.join()
+        releaseAudioEffects()
         record.release()
 
         if (clearBuffer) {
             synchronized(pcmBuffer) { pcmBuffer.reset() }
         }
+    }
+
+    /**
+     * Attaches built-in DSP effects to the capture session when the hardware/OS supports them.
+     * These run in the audio HAL (cheap) and meaningfully improve SNR for far-field/noisy input,
+     * which directly improves Vosk recognition accuracy.
+     */
+    private fun enableAudioEffects(sessionId: Int) {
+        if (sessionId == AudioRecord.ERROR || sessionId == AudioRecord.ERROR_BAD_VALUE) return
+
+        runCatching {
+            if (NoiseSuppressor.isAvailable()) {
+                NoiseSuppressor.create(sessionId)?.let {
+                    it.enabled = true
+                    audioEffects += it
+                }
+            }
+        }.onFailure { Log.w(TAG, "NoiseSuppressor unavailable", it) }
+
+        runCatching {
+            if (AutomaticGainControl.isAvailable()) {
+                AutomaticGainControl.create(sessionId)?.let {
+                    it.enabled = true
+                    audioEffects += it
+                }
+            }
+        }.onFailure { Log.w(TAG, "AutomaticGainControl unavailable", it) }
+
+        runCatching {
+            if (AcousticEchoCanceler.isAvailable()) {
+                AcousticEchoCanceler.create(sessionId)?.let {
+                    it.enabled = true
+                    audioEffects += it
+                }
+            }
+        }.onFailure { Log.w(TAG, "AcousticEchoCanceler unavailable", it) }
+    }
+
+    private fun releaseAudioEffects() {
+        audioEffects.forEach { effect ->
+            runCatching {
+                effect.enabled = false
+                effect.release()
+            }
+        }
+        audioEffects.clear()
     }
 
     private fun captureAudio(
@@ -139,6 +196,7 @@ class AudioRecorder(private val context: Context) {
         while (recorderScope.isActive && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
             val read = record.read(buffer, 0, buffer.size)
             if (read > 0) {
+                applyGain(buffer, read, INPUT_GAIN)
                 val chunk = buffer.copyOf(read)
                 synchronized(pcmBuffer) {
                     pcmBuffer.write(chunk)
@@ -156,7 +214,33 @@ class AudioRecorder(private val context: Context) {
         }
     }
 
+    /**
+     * Applies linear gain to PCM16 little-endian samples in-place, hard-limiting to the valid
+     * 16-bit range so amplification never wraps around into noise. Used to lift quiet mic input
+     * (the on-device AGC is unreliable) closer to the level Vosk expects.
+     */
+    private fun applyGain(buffer: ByteArray, length: Int, gain: Float) {
+        if (gain == 1f) return
+        var index = 0
+        while (index + 1 < length) {
+            val low = buffer[index].toInt() and 0xFF
+            val high = buffer[index + 1].toInt()
+            val sample = (low or (high shl 8)).toShort().toInt()
+            val amplified = (sample * gain).toInt().coerceIn(MIN_PCM16, MAX_PCM16)
+            buffer[index] = (amplified and 0xFF).toByte()
+            buffer[index + 1] = ((amplified shr 8) and 0xFF).toByte()
+            index += 2
+        }
+    }
+
     companion object {
         const val SAMPLE_RATE = 16_000
+        private const val TAG = "AudioRecorder"
+
+        // ~12 dB boost. The measured input sits around -35..-40 dBFS, well below Vosk's
+        // preferred level; this lifts it toward ~-25 dBFS while leaving peak headroom.
+        private const val INPUT_GAIN = 4f
+        private const val MIN_PCM16 = -32_768
+        private const val MAX_PCM16 = 32_767
     }
 }

@@ -391,14 +391,14 @@ class GemmaLlmRepository(
         private const val LEARNER_PREFIX = "Learner: "
         private const val PARTNER_PREFIX = "Partner: "
         private val TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT = """
-            Eres un corrector ortográfico y de puntuación para transcripciones de voz en español. Tu única tarea es añadir mayúsculas, signos de puntuación (¿, ?, ¡, !, ,, .) y corregir errores ortográficos obvios.
+            Eres un corrector de puntuación para transcripciones de voz en español. Tu única tarea es añadir mayúsculas y signos de puntuación (¿, ?, ¡, !, ,, .).
 
             REGLAS ESTRICTAS:
-            1. Consistencia de palabras: No cambies ninguna palabra que ya sea correcta en español. Por ejemplo, "me gusta" es perfectamente correcto, NUNCA lo cambies por "mi costa".
-            2. Corrección permitida: Solo puedes corregir errores ortográficos evidentes (como "baca" por "vaca", "aser" por "hacer", "corazon" por "corazón") o espaciados incorrectos (palabras que el reconocedor de voz unió o separó por error).
-            3. Prohibido reescribir: No intentes mejorar el estilo, no reescribas frases, no agregues ni quites palabras. El 99% de las palabras deben ser idénticas.
+            1. No cambies ninguna palabra: NUNCA modifiques, corrijas, agregues ni elimines palabras. Conserva exactamente las mismas palabras que recibes, en el mismo orden. Por ejemplo, "me gusta" se queda como "me gusta", y NUNCA lo cambies por "mi costa".
+            2. Nada de ortografía: No corrijas errores ortográficos. Aunque una palabra parezca mal escrita, déjala tal cual. Tu trabajo es exclusivamente la puntuación y el uso de mayúsculas.
+            3. Prohibido reescribir: No mejores el estilo ni reescribas frases. Las palabras de salida deben ser idénticas a las de entrada; lo único que puede cambiar son las mayúsculas y los signos de puntuación.
             4. Uso de preguntas (¿?): Sé muy conservador con los signos de interrogación. Solo utilízalos si la frase contiene palabras interrogativas explícitas (como qué, cómo, cuándo, dónde, quién, por qué, cuál) o si la estructura es indudablemente una pregunta. En caso de duda, usa un punto final (.) en lugar de signos de interrogación.
-            5. Formato de salida: Devuelve exclusivamente el texto corregido, sin explicaciones ni comentarios.
+            5. Formato de salida: Devuelve exclusivamente el texto con puntuación, sin explicaciones ni comentarios.
         """.trimIndent()
 
         private const val USER_LABELS =
