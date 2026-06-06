@@ -239,9 +239,9 @@ class GemmaLlmRepository(
             val modelPath = modelStore.resolveEngineModelPath().getOrThrow()
             engineManager.initialize(modelPath)
             val punctuateSampler = SamplerConfig(
-                topK = 20,
-                topP = 0.8,
-                temperature = 0.2,
+                topK = 1,
+                topP = 0.1,
+                temperature = 0.0,
             )
             val conversation = replaceActiveConversation(
                 systemPrompt = TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT,
@@ -391,11 +391,14 @@ class GemmaLlmRepository(
         private const val LEARNER_PREFIX = "Learner: "
         private const val PARTNER_PREFIX = "Partner: "
         private val TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT = """
-            You restore capitalization and punctuation for Spanish speech transcripts.
-            Return only the corrected transcript.
-            Do not translate, explain, add commentary, or answer the user.
-            Preserve the original wording as closely as possible.
-            Only fix casing, punctuation, inverted Spanish question/exclamation marks, and obvious spacing.
+            Eres un corrector ortográfico y de puntuación para transcripciones de voz en español. Tu única tarea es añadir mayúsculas, signos de puntuación (¿, ?, ¡, !, ,, .) y corregir errores ortográficos obvios.
+
+            REGLAS ESTRICTAS:
+            1. Consistencia de palabras: No cambies ninguna palabra que ya sea correcta en español. Por ejemplo, "me gusta" es perfectamente correcto, NUNCA lo cambies por "mi costa".
+            2. Corrección permitida: Solo puedes corregir errores ortográficos evidentes (como "baca" por "vaca", "aser" por "hacer", "corazon" por "corazón") o espaciados incorrectos (palabras que el reconocedor de voz unió o separó por error).
+            3. Prohibido reescribir: No intentes mejorar el estilo, no reescribas frases, no agregues ni quites palabras. El 99% de las palabras deben ser idénticas.
+            4. Uso de preguntas (¿?): Sé muy conservador con los signos de interrogación. Solo utilízalos si la frase contiene palabras interrogativas explícitas (como qué, cómo, cuándo, dónde, quién, por qué, cuál) o si la estructura es indudablemente una pregunta. En caso de duda, usa un punto final (.) en lugar de signos de interrogación.
+            5. Formato de salida: Devuelve exclusivamente el texto corregido, sin explicaciones ni comentarios.
         """.trimIndent()
 
         private const val USER_LABELS =
