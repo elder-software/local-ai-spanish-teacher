@@ -12,10 +12,13 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -67,11 +70,32 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
             var confirmedText = ""
             var currentLineText = ""
             var lastEmittedText = ""
+            // A line is "active" once Moonshine starts decoding speech and until it reports the
+            // line as completed. stop() flushes any active line, so we wait for that completion
+            // event to emit the final, settled transcript instead of guessing with a timer.
+            var lineActive = false
+            var finalizing = false
+            var finalized = false
+            // Completed when the flushed line reports completion after stop(), so the finalizer
+            // wakes the moment the transcript settles rather than waiting for a fixed timer.
+            val lineCompletionSignal = CompletableDeferred<Unit>()
+
+            fun emitFinalAndClose() {
+                if (finalized) return
+                finalized = true
+                val finalText = listOf(confirmedText, currentLineText)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                    .trim()
+                trySend(SttEvent.Final(finalText))
+                close()
+            }
 
             val listener = Consumer<TranscriptEvent> { event: TranscriptEvent ->
                 event.accept(object : TranscriptEventListener() {
                     override fun onLineStarted(e: TranscriptEvent.LineStarted) {
                         Log.d(TAG, "Line started: ${e.line.text}")
+                        lineActive = true
                     }
 
                     override fun onLineTextChanged(e: TranscriptEvent.LineTextChanged) {
@@ -95,6 +119,10 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
                                 .joinToString(" ")
                             currentLineText = ""
                         }
+                        lineActive = false
+                        if (finalizing) {
+                            lineCompletionSignal.complete(Unit)
+                        }
                     }
 
                     override fun onError(e: TranscriptEvent.Error) {
@@ -106,13 +134,22 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
             onStopRequested = {
                 Log.d(TAG, "Stop requested, finalizing transcription")
+                val hadActiveLine = lineActive
+                finalizing = true
+                // Flushes the active line, which triggers onLineCompleted.
                 mic.stop()
-                val finalText = listOf(confirmedText, currentLineText)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ")
-                    .trim()
-                trySend(SttEvent.Final(finalText))
-                close()
+                if (!hadActiveLine) {
+                    // No line was in progress, so there is nothing left to settle.
+                    emitFinalAndClose()
+                } else {
+                    // Wait for the completion event, but cap the wait so a missed callback
+                    // can never hang the finalizer indefinitely.
+                    launch {
+                        withTimeoutOrNull(FINALIZE_TIMEOUT_MS) { lineCompletionSignal.await() }
+                            ?: Log.w(TAG, "Timed out waiting for line completion; finalizing anyway")
+                        emitFinalAndClose()
+                    }
+                }
             }
 
             mic.addListener(listener)
@@ -228,6 +265,8 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
     companion object {
         private const val TAG = "MoonshineSttManager"
+        // Upper bound on how long to wait for the final line-completion event after stop().
+        private const val FINALIZE_TIMEOUT_MS = 2_000L
         private const val MODEL_BASE_URL = "https://download.moonshine.ai/model/base-es/quantized/base-es"
         private const val ENCODER_URL = "$MODEL_BASE_URL/encoder_model.ort"
         private const val DECODER_URL = "$MODEL_BASE_URL/decoder_model_merged.ort"

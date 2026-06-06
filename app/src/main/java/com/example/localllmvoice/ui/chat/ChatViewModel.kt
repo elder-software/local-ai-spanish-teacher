@@ -62,9 +62,12 @@ class ChatViewModel(
 
     fun toggleRecording() {
         val state = _uiState.value
-        if (state !is ChatUiState.ActiveConversation || state.isGenerating) return
+        if (state !is ChatUiState.ActiveConversation || state.isGenerating || state.isTranscribing) return
 
         if (state.isRecording) {
+            // Reflect the finalizing phase immediately so the UI doesn't appear frozen
+            // while the recogniser flushes and settles the final transcript.
+            _uiState.value = state.copy(isRecording = false, isTranscribing = true)
             speechToTextManager.stopListening()
         } else {
             startListening(state)
@@ -79,6 +82,7 @@ class ChatViewModel(
         speechToTextManager.stopListening()
         _uiState.value = state.copy(
             isRecording = false,
+            isTranscribing = false,
             interimTranscript = null,
             inputLevel = 0f,
         )
@@ -206,6 +210,7 @@ class ChatViewModel(
         val current = _uiState.value as? ChatUiState.ActiveConversation ?: return
         _uiState.value = current.copy(
             isRecording = false,
+            isTranscribing = false,
             interimTranscript = null,
             errorMessage = message,
         )
@@ -217,6 +222,7 @@ class ChatViewModel(
         if (spokenText.isEmpty()) {
             _uiState.value = state.copy(
                 isRecording = false,
+                isTranscribing = false,
                 interimTranscript = null,
                 errorMessage = "Didn't catch that — try again",
             )
@@ -224,9 +230,10 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            val normalizedSpokenText = runCatching {
-                llmRepository.punctuateTranscript(spokenText)
-            }.getOrDefault(spokenText).trim()
+            val normalizedSpokenText = spokenText
+//            val normalizedSpokenText = runCatching {
+//                llmRepository.punctuateTranscript(spokenText)
+//            }.getOrDefault(spokenText).trim()
 
             val userMessage = ChatMessage(
                 content = normalizedSpokenText,
@@ -236,6 +243,7 @@ class ChatViewModel(
             _uiState.value = state.copy(
                 messages = messagesWithUser,
                 isRecording = false,
+                isTranscribing = false,
                 isGenerating = true,
                 interimTranscript = null,
             )

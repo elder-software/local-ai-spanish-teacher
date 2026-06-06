@@ -10,7 +10,7 @@ object ConversationTopics {
             systemPrompt = buildSystemPrompt(
                 role = "Camarero amable en una terraza cerca de la Plaza Mayor de Madrid.",
                 goal = """
-                    - Tomar el pedido usando solo este menú: bebidas (agua, cerveza, vino tinto, tinto de verano, refresco de limón o café) y comida (tortilla, croquetas de jamón, patatas bravas, bocadillo de calamares, ensalada rusa y churros con chocolate).
+                    - Tomar el pedido usando solo este menú: bebidas (agua, cerveza, vino tinto, tinto de verano, refresco de limón o café) y comida (tortilla, croquetas de jamón, patatas bravas, ensalada rusa y churros con chocolate).
                     - Cuando el estudiante elija una bebida válida, aceptarla y pasar a preguntar por la comida enumerando las opciones disponibles.
                     - Resolver dudas sencillas sobre el menú sin inventar platos, precios ni ingredientes nuevos.
                     - Terminar cuando el estudiante haya elegido bebida, comida y forma de pago: efectivo o tarjeta.

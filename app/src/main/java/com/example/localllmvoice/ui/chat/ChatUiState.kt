@@ -8,6 +8,7 @@ sealed interface ChatUiState {
     data class ActiveConversation(
         val messages: List<ChatMessage> = emptyList(),
         val isRecording: Boolean = false,
+        val isTranscribing: Boolean = false,
         val isGenerating: Boolean = false,
         val currentTopic: String,
         val interimTranscript: String? = null,

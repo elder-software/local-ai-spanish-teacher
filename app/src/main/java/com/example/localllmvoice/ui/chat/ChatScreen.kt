@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -189,7 +190,8 @@ private fun ActiveChatContent(
 
                     RecordingControls(
                         isRecording = state.isRecording,
-                        enabled = !state.isGenerating,
+                        isTranscribing = state.isTranscribing,
+                        enabled = !state.isGenerating && !state.isTranscribing,
                         onToggleRecording = onToggleRecording,
                         onCancelVoiceInput = onCancelVoiceInput,
                     )
@@ -260,52 +262,94 @@ private fun MicDebugPanel(
     }
 }
 
+private enum class RecordingPhase { Idle, Recording, Transcribing }
+
 @Composable
 private fun RecordingControls(
     isRecording: Boolean,
+    isTranscribing: Boolean,
     enabled: Boolean,
     onToggleRecording: () -> Unit,
     onCancelVoiceInput: () -> Unit,
 ) {
+    val phase = when {
+        isRecording -> RecordingPhase.Recording
+        isTranscribing -> RecordingPhase.Transcribing
+        else -> RecordingPhase.Idle
+    }
+
     AnimatedContent(
-        targetState = isRecording,
+        targetState = phase,
         transitionSpec = {
             fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 4 } togetherWith
                 fadeOut(tween(180)) + slideOutHorizontally(tween(180)) { -it / 4 }
         },
         label = "recording_controls",
-    ) { recording ->
-        if (recording) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = onCancelVoiceInput,
+    ) { currentPhase ->
+        when (currentPhase) {
+            RecordingPhase.Recording -> {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .defaultMinSize(minHeight = 48.dp),
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("Cancel")
+                    OutlinedButton(
+                        onClick = onCancelVoiceInput,
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp),
+                    ) {
+                        Text("Cancel")
+                    }
+                    RecordingButton(
+                        isRecording = true,
+                        enabled = enabled,
+                        onClick = onToggleRecording,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                RecordingButton(
-                    isRecording = true,
-                    enabled = enabled,
-                    onClick = onToggleRecording,
-                    modifier = Modifier.weight(1f),
+            }
+
+            RecordingPhase.Transcribing -> {
+                TranscribingButton(
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
-        } else {
-            RecordingButton(
-                isRecording = false,
-                enabled = enabled,
-                onClick = onToggleRecording,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
+
+            RecordingPhase.Idle -> {
+                RecordingButton(
+                    isRecording = false,
+                    enabled = enabled,
+                    onClick = onToggleRecording,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun TranscribingButton(
+    modifier: Modifier = Modifier,
+) {
+    FilledTonalButton(
+        onClick = {},
+        enabled = false,
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp),
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp,
+        )
+        Text(
+            text = "Transcribing…",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
 
