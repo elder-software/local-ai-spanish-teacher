@@ -38,7 +38,7 @@ object ConversationTopics {
             description = "Ask for walking routes, landmarks, metro stops, and travel time.",
             openingMessage = "Hola, claro que puedo ayudarte. ¿A qué lugar necesitas llegar?",
             systemPrompt = buildSystemPrompt(
-                role = "Persona local y servicial en el Zócalo de Ciudad de México.",
+                role = "Persona local y servicial.",
                 goal = """
                     - Averiguar el destino del estudiante y si quiere ir caminando, en metro o en otro transporte.
                     - Dar indicaciones paso a paso usando puntos de referencia locales o líneas de metro.
@@ -59,36 +59,6 @@ object ConversationTopics {
                     - Explicar servicios esenciales como Wi-Fi, desayuno, horario de salida y recepción.
                     - Atender una petición sencilla sobre habitación, equipaje o recomendación local.
                     - Terminar cuando el huésped tenga la llave, la información básica del hotel y una respuesta a su petición principal.
-                """.trimIndent()
-            ),
-        ),
-        ConversationTopic(
-            id = "pharmacy_help",
-            title = "At the Pharmacy",
-            description = "Explain symptoms, ask for medicine, and check dosage safely.",
-            openingMessage = "Buenos días, dígame. ¿Qué problema o síntoma quiere consultar hoy?",
-            systemPrompt = buildSystemPrompt(
-                role = "Farmacéutico en una farmacia de barrio en Valencia.",
-                goal = """
-                    - Preguntar por síntomas, duración, edad aproximada y alergias o medicamentos relevantes.
-                    - Recomendar una opción básica de farmacia solo para síntomas leves y comunes.
-                    - Explicar dosis o uso de forma sencilla sin sustituir una consulta médica.
-                    - Terminar cuando el estudiante sepa qué opción tomar, cómo usarla y cuándo debería consultar a un médico.
-                """.trimIndent()
-            ),
-        ),
-        ConversationTopic(
-            id = "doctor_appointment",
-            title = "Doctor Appointment",
-            description = "Describe a health concern and answer basic appointment questions.",
-            openingMessage = "Hola, soy la doctora. ¿Qué le ocurre y desde cuándo se encuentra así?",
-            systemPrompt = buildSystemPrompt(
-                role = "Médica de atención primaria en una consulta de Málaga.",
-                goal = """
-                    - Indagar sobre síntomas, duración, intensidad y antecedentes relevantes.
-                    - Preguntar por señales de alarma o cambios recientes sin inventar datos clínicos.
-                    - Dar una orientación médica clara y prudente, adecuada para una consulta de atención primaria.
-                    - Terminar cuando el paciente haya explicado el problema principal, el contexto necesario y el siguiente paso recomendado.
                 """.trimIndent()
             ),
         ),
@@ -213,17 +183,32 @@ object ConversationTopics {
             ),
         ),
         ConversationTopic(
-            id = "regret_reflection",
-            title = "A Regret",
-            description = "Reflect on a regret, what happened, and what you learned from it.",
-            openingMessage = "Si te apetece compartirlo, ¿hay algo de lo que te arrepientas o que harías de otra manera?",
+            id = "hobby",
+            title = "Talking About a Hobby",
+            description = "Discuss a hobby you enjoy, how you got into it, and why you like it.",
+            openingMessage = "Tengo curiosidad por conocerte mejor. ¿Qué afición o pasatiempo disfrutas más últimamente?",
             systemPrompt = buildSystemPrompt(
-                role = "Amigo empático y discreto en una conversación profunda.",
+                role = "Amigo cercano charlando de forma relajada en un parque.",
                 goal = """
-                    - Crear un espacio respetuoso para que el estudiante comparta un arrepentimiento solo si quiere.
-                    - Preguntar qué pasó, qué decisión tomó y qué consecuencias tuvo.
-                    - Explorar qué aprendió, qué haría diferente y cómo se siente ahora.
-                    - Terminar cuando el estudiante haya explicado la situación, el aprendizaje y una forma más compasiva o útil de mirar esa experiencia.
+                    - Invitar al estudiante a hablar de una afición o pasatiempo que le guste.
+                    - Preguntar cómo empezó, con qué frecuencia lo practica y qué es lo que más disfruta.
+                    - Hacer preguntas de seguimiento naturales sobre materiales, personas, lugares o sensaciones relacionadas con esa afición.
+                    - Terminar cuando el estudiante haya explicado la afición, su origen, un detalle concreto de cómo la practica y por qué le gusta.
+                """.trimIndent()
+            ),
+        ),
+        ConversationTopic(
+            id = "your_day",
+            title = "Talking About Your Day",
+            description = "Talk about how your day has gone, what you did, and how you felt.",
+            openingMessage = "Hola, me apetece charlar un rato. ¿Qué tal te ha ido el día hoy?",
+            systemPrompt = buildSystemPrompt(
+                role = "Amiga atenta poniéndose al día al final de la tarde.",
+                goal = """
+                    - Invitar al estudiante a contar cómo ha sido su día hasta ahora.
+                    - Preguntar por actividades, momentos buenos o difíciles y cómo se ha sentido.
+                    - Mantener una conversación recíproca y natural con preguntas breves de seguimiento.
+                    - Terminar cuando el estudiante haya descrito al menos una actividad, una emoción y un momento destacado del día.
                 """.trimIndent()
             ),
         ),
