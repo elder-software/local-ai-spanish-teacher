@@ -12,11 +12,6 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 val huggingFaceToken = localProperties.getProperty("huggingface.token", "").trim()
-val speechToTextEngine = localProperties.getProperty("speechToText.engine", "moonshine")
-    .trim()
-    .lowercase()
-    .takeIf { it == "moonshine" || it == "android" || it == "vosk" }
-    ?: "moonshine"
 
 android {
     namespace = "com.example.localllmvoice"
@@ -33,7 +28,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "HUGGING_FACE_TOKEN", "\"$huggingFaceToken\"")
-        buildConfigField("String", "SPEECH_TO_TEXT_ENGINE", "\"$speechToTextEngine\"")
     }
 
     buildTypes {
