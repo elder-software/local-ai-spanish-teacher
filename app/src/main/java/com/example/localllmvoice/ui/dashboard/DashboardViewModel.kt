@@ -5,8 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.localllmvoice.data.gemma.GemmaModelConfig
 import com.example.localllmvoice.data.repository.GemmaModelStatus
 import com.example.localllmvoice.data.repository.ModelAvailability
-import com.example.localllmvoice.data.repository.ModelDownloadEvent
 import com.example.localllmvoice.di.AppContainer
+import com.example.localllmvoice.domain.DownloadAllModelsEvent
 import com.example.localllmvoice.domain.model.ConversationTopics
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +32,34 @@ class DashboardViewModel(
     fun refreshModelStatus() {
         viewModelScope.launch {
             appContainer.gemmaLlmRepository.checkModelAvailability().collect { availability ->
-                applyAvailability(availability)
+                val sttReady = appContainer.speechToTextManager.isModelReady()
+                if (!sttReady && availability.status == GemmaModelStatus.READY) {
+                    _uiState.update {
+                        it.copy(
+                            modelStatus = GemmaModelStatus.DOWNLOAD_REQUIRED,
+                            modelStatusMessage = "Download Spanish STT model to run offline",
+                            activeBackend = availability.activeBackend,
+                            deviceCapability = availability.deviceCapability,
+                            downloadProgressBytes = 0L,
+                            downloadTotalBytes = 0L,
+                            errorMessage = null,
+                        )
+                    }
+                } else if (!sttReady && availability.status == GemmaModelStatus.DOWNLOAD_REQUIRED) {
+                    _uiState.update {
+                        it.copy(
+                            modelStatus = GemmaModelStatus.DOWNLOAD_REQUIRED,
+                            modelStatusMessage = "Download Gemma and Spanish STT models (~${GemmaModelConfig.ESTIMATED_SIZE_MB} MB) to run offline",
+                            activeBackend = availability.activeBackend,
+                            deviceCapability = availability.deviceCapability,
+                            downloadProgressBytes = 0L,
+                            downloadTotalBytes = 0L,
+                            errorMessage = null,
+                        )
+                    }
+                } else {
+                    applyAvailability(availability)
+                }
             }
         }
     }
@@ -46,9 +73,9 @@ class DashboardViewModel(
                     errorMessage = null,
                 )
             }
-            appContainer.gemmaLlmRepository.downloadModel().collect { event ->
+            appContainer.downloadAllModelsUseCase().collect { event ->
                 when (event) {
-                    is ModelDownloadEvent.Progress -> {
+                    is DownloadAllModelsEvent.GemmaProgress -> {
                         _uiState.update {
                             it.copy(
                                 isDownloading = true,
@@ -63,12 +90,24 @@ class DashboardViewModel(
                         }
                     }
 
-                    ModelDownloadEvent.Completed -> {
+                    is DownloadAllModelsEvent.SttProgress -> {
+                        _uiState.update {
+                            it.copy(
+                                isDownloading = true,
+                                modelStatus = GemmaModelStatus.DOWNLOADING,
+                                downloadProgressBytes = event.progressPercent.toLong(),
+                                downloadTotalBytes = 100L,
+                                modelStatusMessage = "Downloading Spanish STT model… ${event.progressPercent}%",
+                            )
+                        }
+                    }
+
+                    DownloadAllModelsEvent.Completed -> {
                         _uiState.update { it.copy(isDownloading = false) }
                         refreshModelStatus()
                     }
 
-                    is ModelDownloadEvent.Failed -> {
+                    is DownloadAllModelsEvent.Failed -> {
                         _uiState.update {
                             it.copy(
                                 isDownloading = false,

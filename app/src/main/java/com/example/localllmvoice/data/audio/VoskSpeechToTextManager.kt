@@ -8,6 +8,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -47,7 +49,7 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
 
         if (!isModelReady()) {
             try {
-                downloadModel { progress ->
+                downloadModel().collect { progress ->
                     trySend(SttEvent.Partial("Downloading Spanish STT model ($progress%)…"))
                 }
             } catch (e: Exception) {
@@ -153,11 +155,11 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
         onStopRequested?.invoke()
     }
 
-    private fun isModelReady(): Boolean {
+    override fun isModelReady(): Boolean {
         return File(modelDir, "am").isDirectory && File(modelDir, "conf").isDirectory
     }
 
-    private suspend fun downloadModel(onProgress: (Int) -> Unit) = withContext(Dispatchers.IO) {
+    override fun downloadModel(): Flow<Int> = flow {
         val zip = File(context.cacheDir, "vosk-model.zip")
         val request = Request.Builder().url(MODEL_URL).build()
         client.newCall(request).execute().use { response ->
@@ -180,9 +182,7 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
                     } else {
                         0
                     }
-                    withContext(Dispatchers.Main) {
-                        onProgress(percent.coerceIn(0, 99))
-                    }
+                    emit(percent.coerceIn(0, 99))
                 }
             }
         }
@@ -205,10 +205,8 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
 
         zip.delete()
 
-        withContext(Dispatchers.Main) {
-            onProgress(100)
-        }
-    }
+        emit(100)
+    }.flowOn(Dispatchers.IO)
 
     private fun ensureModelLoaded() {
         if (model != null) return

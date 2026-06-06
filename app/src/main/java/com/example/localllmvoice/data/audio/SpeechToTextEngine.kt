@@ -10,4 +10,8 @@ interface SpeechToTextEngine {
     fun transcribe(languageTag: String): Flow<SttEvent>
 
     fun stopListening()
+
+    fun isModelReady(): Boolean
+
+    fun downloadModel(): Flow<Int>
 }

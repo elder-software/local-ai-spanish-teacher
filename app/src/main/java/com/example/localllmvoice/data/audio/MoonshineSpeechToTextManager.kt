@@ -4,15 +4,13 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
-import ai.moonshine.voice.JNI
-import ai.moonshine.voice.MicTranscriber
-import ai.moonshine.voice.TranscriptEvent
-import ai.moonshine.voice.TranscriptEventListener
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -21,6 +19,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 
+/*
 class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextEngine {
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -47,7 +46,7 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
         if (!isModelReady()) {
             try {
-                downloadModel { progress ->
+                downloadModel().collect { progress ->
                     trySend(SttEvent.Partial("Downloading Spanish STT model ($progress%)…"))
                 }
             } catch (e: Exception) {
@@ -161,14 +160,14 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
         onStopRequested?.invoke()
     }
 
-    private fun isModelReady(): Boolean {
+    override fun isModelReady(): Boolean {
         val encoder = File(modelDir, "encoder_model.ort")
         val decoder = File(modelDir, "decoder_model_merged.ort")
         val tokenizer = File(modelDir, "tokenizer.bin")
         return encoder.exists() && decoder.exists() && tokenizer.exists()
     }
 
-    private suspend fun downloadModel(onProgress: (Int) -> Unit) = withContext(Dispatchers.IO) {
+    override fun downloadModel(): Flow<Int> = flow {
         modelDir.mkdirs()
 
         val files = listOf(
@@ -208,9 +207,7 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
                         if (contentLength > 0) {
                             val fileProgress = ((totalBytesDownloaded * 100) / contentLength).toInt()
                             val overallProgress = ((completedFiles * 100 + fileProgress) / files.size)
-                            withContext(Dispatchers.Main) {
-                                onProgress(overallProgress.coerceIn(0, 99))
-                            }
+                            emit(overallProgress.coerceIn(0, 99))
                         }
                     }
                 }
@@ -222,11 +219,9 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
             completedFiles++
         }
 
-        withContext(Dispatchers.Main) {
-            onProgress(100)
-        }
+        emit(100)
         Log.i(TAG, "Moonshine Spanish model downloaded successfully")
-    }
+    }.flowOn(Dispatchers.IO)
 
     companion object {
         private const val TAG = "MoonshineSttManager"
@@ -236,3 +231,4 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
         private const val TOKENIZER_URL = "$MODEL_BASE_URL/tokenizer.bin"
     }
 }
+*/

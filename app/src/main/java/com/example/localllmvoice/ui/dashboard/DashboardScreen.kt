@@ -123,7 +123,7 @@ private fun ModelStatusCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "${GemmaModelConfig.MODEL_LABEL} (on-device)",
+                text = "On-device Models",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -170,7 +170,7 @@ private fun ModelStatusCard(
             }
             if (canDownload) {
                 Button(onClick = onDownload, enabled = !isDownloading) {
-                    Text("Download ${GemmaModelConfig.MODEL_LABEL}")
+                    Text("Download models")
                 }
             }
             Button(onClick = onRefresh, enabled = !isDownloading) {
