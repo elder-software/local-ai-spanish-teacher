@@ -234,7 +234,7 @@ class GemmaLlmRepository(
             messages
         }
 
-        // Keep the rendered prompt comfortably inside Qwen2.5's mobile KV cache.
+        // Keep the rendered prompt comfortably inside the configured model's mobile KV cache.
         return withoutCurrentTurn.takeLast(GemmaModelConfig.MAX_HISTORY_MESSAGES)
     }
 
@@ -245,7 +245,7 @@ class GemmaLlmRepository(
 
     private fun stripLeadingAssistantLabel(text: String): String =
         LEADING_ASSISTANT_LABEL_PATTERN.replaceFirst(
-            LEADING_QWEN_ASSISTANT_HEADER_PATTERN.replaceFirst(text, ""),
+            LEADING_ASSISTANT_HEADER_PATTERN.replaceFirst(text, ""),
             "",
         )
 
@@ -290,15 +290,18 @@ class GemmaLlmRepository(
         private val LEADING_ASSISTANT_LABEL_PATTERN =
             Regex("^\\s*(?:$ASSISTANT_LABELS)\\s*:\\s*", RegexOption.IGNORE_CASE)
 
-        private val LEADING_QWEN_ASSISTANT_HEADER_PATTERN =
+        // Strips a leaked assistant turn header, e.g. Gemma 4 "<|turn>model" or Qwen "<|im_start|>assistant".
+        private val LEADING_ASSISTANT_HEADER_PATTERN =
             Regex(
-                "^\\s*<\\|im_start\\|>\\s*(?:$ASSISTANT_LABELS)\\s*:?\\s*",
+                "^\\s*(?:<\\|turn>|<\\|im_start\\|>)\\s*(?:$ASSISTANT_LABELS)?\\s*:?\\s*",
                 RegexOption.IGNORE_CASE,
             )
 
         private val STOP_PATTERNS = listOf(
             Regex(
-                "<(?:start|end)_of_turn>|<\\|im_(?:start|end)\\|>|<\\|endoftext\\|>",
+                // Gemma 4 turn/thinking markers, plus legacy Gemma/Qwen markers as fallbacks.
+                "<\\|turn>|<turn\\|>|<\\|think\\|>|<\\|channel>|<channel\\|>|" +
+                    "<(?:start|end)_of_turn>|<\\|im_(?:start|end)\\|>|<\\|endoftext\\|>",
                 RegexOption.IGNORE_CASE,
             ),
             Regex("^\\s*(?:$USER_LABELS)\\s*:", RegexOption.IGNORE_CASE),

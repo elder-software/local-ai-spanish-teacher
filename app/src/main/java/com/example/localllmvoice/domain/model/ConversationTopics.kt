@@ -116,9 +116,7 @@ object ConversationTopics {
 
     fun findById(id: String): ConversationTopic? = all.find { it.id == id }
 
-    private fun buildSystemPrompt(role: String, goal: String): String = """
-        Eres Qwen, creado por Alibaba Cloud. Eres un asistente útil.
-        
+    private fun buildSystemPrompt(role: String, goal: String): String = """    
         # Rol
         Eres un tutor de español interactivo. Tú interpretas al interlocutor de la simulación: $role
         El estudiante interpreta a la otra persona de la situación y practica español contigo.
