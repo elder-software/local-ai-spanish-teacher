@@ -5,6 +5,7 @@ import com.example.localllmvoice.BuildConfig
 import com.example.localllmvoice.data.audio.AndroidSpeechToTextManager
 import com.example.localllmvoice.data.audio.SpeechToTextEngine
 import com.example.localllmvoice.data.audio.SpeechToTextManager
+import com.example.localllmvoice.data.audio.VoskSpeechToTextManager
 import com.example.localllmvoice.data.audio.TextToSpeechManager
 import com.example.localllmvoice.data.repository.DemoLlmRepository
 import com.example.localllmvoice.data.repository.GemmaLlmRepository
@@ -33,6 +34,7 @@ class AppContainer(context: Context) {
     private fun createSpeechToTextManager(): SpeechToTextEngine =
         when (BuildConfig.SPEECH_TO_TEXT_ENGINE) {
             "android" -> AndroidSpeechToTextManager(appContext)
+            "vosk" -> VoskSpeechToTextManager(appContext)
             "moonshine" -> SpeechToTextManager(appContext)
             else -> SpeechToTextManager(appContext)
         }
