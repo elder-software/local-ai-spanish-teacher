@@ -146,8 +146,19 @@ class AndroidSpeechToTextManager(context: Context) : SpeechToTextEngine {
 
         startRecognizer(recognizerRef, listener, languageTag, onDevice = onDeviceMode.get())
 
+        // Safety net: some recognizers never fire onError/onResults if the mic stalls. Force a
+        // graceful stop after a hard cap so a session can't hang the UI in the recording state.
+        val maxSessionStop = Runnable {
+            if (!completed.get()) {
+                Log.i(TAG, "Max session length reached; stopping recognizer")
+                recognizerRef.get()?.stopListening()
+            }
+        }
+        mainHandler.postDelayed(maxSessionStop, MAX_SESSION_LENGTH_MS)
+
         awaitClose {
             stopRequested = null
+            mainHandler.removeCallbacks(maxSessionStop)
             mainHandler.post {
                 recognizerRef.getAndSet(null)?.run {
                     setRecognitionListener(null)
@@ -184,11 +195,11 @@ class AndroidSpeechToTextManager(context: Context) : SpeechToTextEngine {
             }
             recognizerRef.set(recognizer)
             recognizer.setRecognitionListener(listener)
-            recognizer.startListening(recognitionIntent(languageTag))
+            recognizer.startListening(recognitionIntent(languageTag, onDevice = onDevice))
         }
     }
 
-    private fun recognitionIntent(languageTag: String): Intent =
+    private fun recognitionIntent(languageTag: String, onDevice: Boolean = false): Intent =
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
@@ -197,6 +208,31 @@ class AndroidSpeechToTextManager(context: Context) : SpeechToTextEngine {
             // Keep the recognizer's confidence-ranked alternatives so we can pick the best match.
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, MAX_RECOGNITION_RESULTS)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
+
+            // Language learners pause to think mid-sentence. The recognizer's default end-of-speech
+            // silence windows are aggressive (~1s) and cut people off. Widen them so a natural pause
+            // doesn't end the turn early, while still ending promptly after a clear, settled stop.
+            putExtra(
+                RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS,
+                COMPLETE_SILENCE_MS,
+            )
+            putExtra(
+                RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS,
+                POSSIBLY_COMPLETE_SILENCE_MS,
+            )
+            // Don't finalize until the speaker has had a moment to begin; avoids empty "no match"
+            // results when someone is still gathering the phrase.
+            putExtra(
+                RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS,
+                MIN_SPEECH_LENGTH_MS,
+            )
+
+            // Only the dedicated on-device recognizer reads from the offline model store, so request
+            // offline preference solely in that mode (forcing it on the default recognizer is the
+            // unreliable path the class docs warn about).
+            if (onDevice) {
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            }
         }
 
     /**
@@ -324,5 +360,14 @@ class AndroidSpeechToTextManager(context: Context) : SpeechToTextEngine {
         private const val TAG = "AndroidSpeechToText"
         private const val MAX_RECOGNITION_RESULTS = 5
         private const val DEFAULT_LANGUAGE = "es-ES"
+
+        // Silence the recognizer tolerates after speech looks finished before ending the turn.
+        private const val COMPLETE_SILENCE_MS = 2_500L
+        // Silence after speech *might* be finished; kept a touch shorter for responsiveness.
+        private const val POSSIBLY_COMPLETE_SILENCE_MS = 2_000L
+        // Minimum capture window so a slow start isn't finalized as an empty result.
+        private const val MIN_SPEECH_LENGTH_MS = 2_000L
+        // Absolute cap on a single recording session as a hang guard.
+        private const val MAX_SESSION_LENGTH_MS = 60_000L
     }
 }
