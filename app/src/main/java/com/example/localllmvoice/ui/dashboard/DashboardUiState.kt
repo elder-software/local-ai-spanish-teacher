@@ -10,17 +10,12 @@ data class DashboardUiState(
     val modelStatusMessage: String = "",
     val activeBackend: String? = null,
     val deviceCapability: DeviceCapability? = null,
-    val practiceModeEnabled: Boolean = false,
     val isDownloading: Boolean = false,
     val downloadProgressBytes: Long = 0L,
     val downloadTotalBytes: Long = 0L,
     val errorMessage: String? = null,
 ) {
-    val canStartConversation: Boolean =
-        practiceModeEnabled || modelStatus == GemmaModelStatus.READY
+    val canStartConversation: Boolean = modelStatus == GemmaModelStatus.READY
 
-    val canDownload: Boolean =
-        !practiceModeEnabled &&
-            (modelStatus == GemmaModelStatus.DOWNLOAD_REQUIRED ||
-                modelStatus == GemmaModelStatus.ERROR)
+    val canDownload: Boolean = modelStatus == GemmaModelStatus.DOWNLOAD_REQUIRED || modelStatus == GemmaModelStatus.ERROR
 }

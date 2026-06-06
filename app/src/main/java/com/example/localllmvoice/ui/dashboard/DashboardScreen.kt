@@ -66,15 +66,9 @@ fun DashboardScreen(
                         isDownloading = uiState.isDownloading,
                         downloadProgress = uiState.downloadProgressBytes,
                         downloadTotal = uiState.downloadTotalBytes,
-                        practiceModeEnabled = uiState.practiceModeEnabled,
                         canDownload = uiState.canDownload,
-                        showPracticeModeOffer = !uiState.practiceModeEnabled &&
-                            (uiState.modelStatus == GemmaModelStatus.INSUFFICIENT_DEVICE ||
-                                uiState.modelStatus == GemmaModelStatus.ERROR),
                         onDownload = viewModel::downloadModel,
                         onRefresh = viewModel::refreshModelStatus,
-                        onEnablePracticeMode = { viewModel.setPracticeMode(true) },
-                        onDisablePracticeMode = { viewModel.setPracticeMode(false) },
                     )
                 }
 
@@ -116,13 +110,9 @@ private fun ModelStatusCard(
     isDownloading: Boolean,
     downloadProgress: Long,
     downloadTotal: Long,
-    practiceModeEnabled: Boolean,
     canDownload: Boolean,
-    showPracticeModeOffer: Boolean,
     onDownload: () -> Unit,
     onRefresh: () -> Unit,
-    onEnablePracticeMode: () -> Unit,
-    onDisablePracticeMode: () -> Unit,
 ) {
     OutlinedCard(
         shape = MaterialTheme.shapes.medium,
@@ -133,7 +123,7 @@ private fun ModelStatusCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = if (practiceModeEnabled) "Practice mode" else "${GemmaModelConfig.MODEL_LABEL} (on-device)",
+                text = "${GemmaModelConfig.MODEL_LABEL} (on-device)",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -178,24 +168,13 @@ private fun ModelStatusCard(
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
             }
-            if (practiceModeEnabled) {
-                OutlinedButton(onClick = onDisablePracticeMode) {
-                    Text("Turn off practice mode")
+            if (canDownload) {
+                Button(onClick = onDownload, enabled = !isDownloading) {
+                    Text("Download ${GemmaModelConfig.MODEL_LABEL}")
                 }
-            } else {
-                if (canDownload) {
-                    Button(onClick = onDownload, enabled = !isDownloading) {
-                        Text("Download ${GemmaModelConfig.MODEL_LABEL}")
-                    }
-                }
-                Button(onClick = onRefresh, enabled = !isDownloading) {
-                    Text("Refresh status")
-                }
-                if (showPracticeModeOffer) {
-                    OutlinedButton(onClick = onEnablePracticeMode) {
-                        Text("Use practice mode instead")
-                    }
-                }
+            }
+            Button(onClick = onRefresh, enabled = !isDownloading) {
+                Text("Refresh status")
             }
         }
     }

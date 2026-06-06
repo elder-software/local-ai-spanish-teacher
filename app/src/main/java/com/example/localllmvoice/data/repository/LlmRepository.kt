@@ -28,8 +28,6 @@ sealed interface ModelDownloadEvent {
 }
 
 interface LlmRepository {
-    val isDemoMode: Boolean
-
     fun checkModelAvailability(): Flow<ModelAvailability>
 
     fun downloadModel(): Flow<ModelDownloadEvent>
@@ -41,6 +39,8 @@ interface LlmRepository {
     ): Flow<String>
 
     fun analyzeConversation(transcript: String): Flow<String>
+
+    suspend fun punctuateTranscript(transcript: String): String
 
     suspend fun resetConversation()
 }

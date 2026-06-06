@@ -29,7 +29,7 @@ class ChatViewModelFactory(
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             return ChatViewModel(
                 topic = topic,
-                llmRepository = appContainer.llmRepository(),
+                llmRepository = appContainer.gemmaLlmRepository,
                 speechToTextManager = appContainer.speechToTextManager,
                 textToSpeechManager = appContainer.textToSpeechManager,
                 feedbackSessionStore = appContainer.feedbackSessionStore,
@@ -46,7 +46,7 @@ class FeedbackViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(FeedbackViewModel::class.java)) {
             return FeedbackViewModel(
-                llmRepository = appContainer.llmRepository(),
+                llmRepository = appContainer.gemmaLlmRepository,
                 feedbackSessionStore = appContainer.feedbackSessionStore,
             ) as T
         }

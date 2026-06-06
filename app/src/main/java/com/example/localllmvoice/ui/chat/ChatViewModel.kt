@@ -175,8 +175,12 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
+            val normalizedSpokenText = runCatching {
+                llmRepository.punctuateTranscript(spokenText)
+            }.getOrDefault(spokenText).trim()
+
             val userMessage = ChatMessage(
-                content = spokenText,
+                content = normalizedSpokenText,
                 isUser = true,
             )
             val messagesWithUser = state.messages + userMessage
@@ -198,7 +202,7 @@ class ChatViewModel(
                     llmRepository.generateStreamingResponse(
                         systemPrompt = systemPrompt,
                         conversationContext = formatConversationContext(messagesWithUser),
-                        userText = spokenText,
+                        userText = normalizedSpokenText,
                     ).collect { token ->
                         streamParser.processToken(token) { visible ->
                             if (visible.isNotEmpty()) {

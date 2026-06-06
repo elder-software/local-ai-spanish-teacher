@@ -3,6 +3,8 @@ package com.example.localllmvoice.data.audio
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -19,7 +21,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * On-device, offline speech-to-text powered by Vosk.
- * Captures microphone input via [AudioRecorder], then transcribes the recorded PCM buffer.
+ * Captures microphone input via [AudioRecorder] and streams PCM chunks into Vosk for live partials.
  */
 class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine {
     private val audioRecorder = AudioRecorder(context)
@@ -63,36 +65,73 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
             return@callbackFlow
         }
 
-        onStopRequested = {
-            launch {
-                trySend(SttEvent.Partial("Transcribing…"))
-                val pcmResult = audioRecorder.stopAndGetRawPcm()
-                if (pcmResult.isFailure) {
-                    trySend(SttEvent.Failure(pcmResult.exceptionOrNull()?.message ?: "Failed to stop recording"))
-                    close()
-                    return@launch
+        val activeModel = model ?: run {
+            trySend(SttEvent.Failure("Failed to load STT engine: Model not initialized"))
+            close()
+            return@callbackFlow
+        }
+
+        val recognizer = Recognizer(activeModel, AudioRecorder.SAMPLE_RATE.toFloat())
+        val pcmChunks = Channel<ByteArray>(Channel.UNLIMITED)
+        var confirmedText = ""
+        var lastPartialText = ""
+
+        val recognitionJob: Job = launch(Dispatchers.Default) {
+            for (chunk in pcmChunks) {
+                val accepted = recognizer.acceptWaveForm(chunk, chunk.size)
+                val displayText = if (accepted) {
+                    val segment = parseVoskText(recognizer.result, "text")
+                    if (segment.isNotBlank()) {
+                        confirmedText = listOf(confirmedText, segment)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" ")
+                    }
+                    confirmedText
+                } else {
+                    val partial = parseVoskText(recognizer.partialResult, "partial")
+                    listOf(confirmedText, partial)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" ")
                 }
 
-                val pcmBytes = pcmResult.getOrThrow()
-                if (pcmBytes.isEmpty()) {
-                    trySend(SttEvent.Failure("No audio recorded"))
-                    close()
-                    return@launch
-                }
-
-                try {
-                    val text = performTranscription(pcmBytes)
-                    trySend(SttEvent.Final(text))
-                } catch (e: Exception) {
-                    trySend(SttEvent.Failure(e.message ?: "Transcription failed"))
-                } finally {
-                    close()
+                if (displayText.isNotBlank() && displayText != lastPartialText) {
+                    lastPartialText = displayText
+                    trySend(SttEvent.Partial(displayText))
                 }
             }
         }
 
-        val startResult = audioRecorder.start()
+        onStopRequested = {
+            launch {
+                trySend(SttEvent.Partial("Transcribing…"))
+                val stopResult = audioRecorder.stopAndGetRawPcm()
+                if (stopResult.isFailure) {
+                    trySend(SttEvent.Failure(stopResult.exceptionOrNull()?.message ?: "Failed to stop recording"))
+                    close()
+                    return@launch
+                }
+
+                pcmChunks.close()
+                recognitionJob.join()
+
+                val finalSegment = parseVoskText(recognizer.finalResult, "text")
+                val finalText = listOf(confirmedText, finalSegment)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                    .trim()
+
+                trySend(SttEvent.Final(finalText))
+                close()
+            }
+        }
+
+        val startResult = audioRecorder.start { chunk ->
+            pcmChunks.trySend(chunk)
+        }
         if (startResult.isFailure) {
+            pcmChunks.close()
+            recognitionJob.cancel()
+            recognizer.close()
             trySend(SttEvent.Failure(startResult.exceptionOrNull()?.message ?: "Failed to start recording"))
             close()
             return@callbackFlow
@@ -102,6 +141,9 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
 
         awaitClose {
             onStopRequested = null
+            pcmChunks.close()
+            recognitionJob.cancel()
+            recognizer.close()
             audioRecorder.cancel()
         }
     }
@@ -173,24 +215,8 @@ class VoskSpeechToTextManager(private val context: Context) : SpeechToTextEngine
         Log.i(TAG, "Vosk Spanish model loaded successfully")
     }
 
-    private suspend fun performTranscription(pcmBytes: ByteArray): String = withContext(Dispatchers.Default) {
-        val activeModel = model ?: throw IllegalStateException("Model not initialized")
-        val recognizer = Recognizer(activeModel, AudioRecorder.SAMPLE_RATE.toFloat())
-        try {
-            val chunkSize = 4096
-            var offset = 0
-            while (offset < pcmBytes.size) {
-                val end = minOf(offset + chunkSize, pcmBytes.size)
-                val chunk = pcmBytes.copyOfRange(offset, end)
-                recognizer.acceptWaveForm(chunk, chunk.size)
-                offset = end
-            }
-            val finalJson = recognizer.finalResult
-            JSONObject(finalJson).optString("text").trim()
-        } finally {
-            recognizer.close()
-        }
-    }
+    private fun parseVoskText(json: String, field: String): String =
+        JSONObject(json).optString(field).trim()
 
     companion object {
         private const val TAG = "VoskSpeechToTextManager"

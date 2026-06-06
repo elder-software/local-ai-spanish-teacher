@@ -32,7 +32,7 @@ class AudioRecorder(private val context: Context) {
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
 
-    suspend fun start(): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun start(onPcmChunk: ((ByteArray) -> Unit)? = null): Result<Unit> = withContext(Dispatchers.IO) {
         if (!hasRecordPermission()) {
             return@withContext Result.failure(SecurityException("RECORD_AUDIO not granted"))
         }
@@ -63,7 +63,7 @@ class AudioRecorder(private val context: Context) {
         recorderMutex.withLock {
             audioRecord = record
             recordingJob = recorderScope.launch {
-                captureAudio(record)
+                captureAudio(record, onPcmChunk)
             }
         }
         Result.success(Unit)
@@ -131,14 +131,19 @@ class AudioRecorder(private val context: Context) {
         }
     }
 
-    private fun captureAudio(record: AudioRecord) {
+    private fun captureAudio(
+        record: AudioRecord,
+        onPcmChunk: ((ByteArray) -> Unit)?,
+    ) {
         val buffer = ByteArray(4_096)
         while (recorderScope.isActive && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
             val read = record.read(buffer, 0, buffer.size)
             if (read > 0) {
+                val chunk = buffer.copyOf(read)
                 synchronized(pcmBuffer) {
-                    pcmBuffer.write(buffer, 0, read)
+                    pcmBuffer.write(chunk)
                 }
+                onPcmChunk?.invoke(chunk)
                 continue
             }
 

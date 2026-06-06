@@ -36,8 +36,6 @@ class GemmaLlmRepository(
     private val conversationMutex = Mutex()
     private var activeConversation: Conversation? = null
 
-    override val isDemoMode: Boolean = false
-
     override fun checkModelAvailability(): Flow<ModelAvailability> = flow {
         modelStore.ensureModelDirectory()
         val capability = capabilityChecker.evaluate()
@@ -233,6 +231,56 @@ class GemmaLlmRepository(
         }
     }.flowOn(Dispatchers.Default)
 
+    override suspend fun punctuateTranscript(transcript: String): String = conversationMutex.withLock {
+        val rawTranscript = transcript.trim()
+        if (rawTranscript.isEmpty()) return@withLock rawTranscript
+
+        val modelPath = modelStore.resolveEngineModelPath().getOrThrow()
+        engineManager.initialize(modelPath)
+        val punctuateSampler = SamplerConfig(
+            topK = 20,
+            topP = 0.8,
+            temperature = 0.2,
+        )
+
+        // Punctuation is a one-off side pass, so clear any prior chat conversation and recreate
+        // the real chat conversation from rendered history on the next generation turn.
+        closeActiveConversation()
+        val conversation = engineManager.createConversation(
+            systemPrompt = TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT,
+            samplerConfig = punctuateSampler,
+        )
+
+        try {
+            val parser = GemmaStreamParser()
+            var previousText = ""
+            val punctuated = StringBuilder()
+
+            conversation.sendMessageAsync(Contents.of(Content.Text(rawTranscript))).collect { message ->
+                val text = stripLeadingAssistantLabel(message.textContent())
+                val delta = if (text.startsWith(previousText)) {
+                    text.removePrefix(previousText)
+                } else {
+                    text
+                }
+                previousText = text
+                parser.processToken(delta) { visible ->
+                    if (visible.isNotEmpty()) {
+                        punctuated.append(visible)
+                    }
+                }
+            }
+
+            punctuated.toString().trim().ifEmpty { rawTranscript }
+        } catch (e: CancellationException) {
+            runCatching { conversation.cancelProcess() }
+            throw e
+        } finally {
+            runCatching { conversation.cancelProcess() }
+            runCatching { conversation.close() }
+        }
+    }
+
     override suspend fun resetConversation() {
         conversationMutex.withLock {
             closeActiveConversation()
@@ -348,6 +396,13 @@ class GemmaLlmRepository(
         private const val TAG = "GemmaLlmRepository"
         private const val LEARNER_PREFIX = "Learner: "
         private const val PARTNER_PREFIX = "Partner: "
+        private val TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT = """
+            You restore capitalization and punctuation for Spanish speech transcripts.
+            Return only the corrected transcript.
+            Do not translate, explain, add commentary, or answer the user.
+            Preserve the original wording as closely as possible.
+            Only fix casing, punctuation, inverted Spanish question/exclamation marks, and obvious spacing.
+        """.trimIndent()
 
         private const val USER_LABELS =
             "Learner|User|Human|Student|Estudiante|Usuario|Alumno|Cliente"

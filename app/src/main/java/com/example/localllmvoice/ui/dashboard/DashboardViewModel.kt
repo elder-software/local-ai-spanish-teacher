@@ -21,7 +21,6 @@ class DashboardViewModel(
         DashboardUiState(
             topics = ConversationTopics.all,
             modelStatusMessage = "Checking device and ${GemmaModelConfig.MODEL_LABEL} model…",
-            practiceModeEnabled = appContainer.practiceModeEnabled,
         ),
     )
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
@@ -32,20 +31,13 @@ class DashboardViewModel(
 
     fun refreshModelStatus() {
         viewModelScope.launch {
-            appContainer.llmRepository().checkModelAvailability().collect { availability ->
+            appContainer.gemmaLlmRepository.checkModelAvailability().collect { availability ->
                 applyAvailability(availability)
             }
         }
     }
 
-    fun setPracticeMode(enabled: Boolean) {
-        appContainer.enablePracticeMode(enabled)
-        _uiState.update { it.copy(practiceModeEnabled = enabled, errorMessage = null) }
-        refreshModelStatus()
-    }
-
     fun downloadModel() {
-        if (appContainer.practiceModeEnabled) return
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -54,7 +46,7 @@ class DashboardViewModel(
                     errorMessage = null,
                 )
             }
-            appContainer.llmRepository().downloadModel().collect { event ->
+            appContainer.gemmaLlmRepository.downloadModel().collect { event ->
                 when (event) {
                     is ModelDownloadEvent.Progress -> {
                         _uiState.update {
@@ -98,7 +90,6 @@ class DashboardViewModel(
                 modelStatusMessage = availability.message,
                 activeBackend = availability.activeBackend,
                 deviceCapability = availability.deviceCapability,
-                practiceModeEnabled = appContainer.practiceModeEnabled,
                 downloadProgressBytes = availability.downloadedBytes,
                 downloadTotalBytes = availability.totalBytes,
                 errorMessage = if (availability.status == GemmaModelStatus.ERROR) {
