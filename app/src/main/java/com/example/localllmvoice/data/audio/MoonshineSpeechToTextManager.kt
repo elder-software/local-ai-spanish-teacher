@@ -4,6 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
+import ai.moonshine.voice.JNI
+import ai.moonshine.voice.MicTranscriber
+import ai.moonshine.voice.TranscriptEvent
+import ai.moonshine.voice.TranscriptEventListener
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -19,7 +23,6 @@ import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 
-/*
 class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextEngine {
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -144,7 +147,7 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
         return mic
     }
 
-    fun preload() {
+    override fun preload() {
         if (!isModelReady()) return
         Thread {
             try {
@@ -231,4 +234,3 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
         private const val TOKENIZER_URL = "$MODEL_BASE_URL/tokenizer.bin"
     }
 }
-*/

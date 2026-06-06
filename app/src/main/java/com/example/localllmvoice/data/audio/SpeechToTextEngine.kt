@@ -14,4 +14,6 @@ interface SpeechToTextEngine {
     fun isModelReady(): Boolean
 
     fun downloadModel(): Flow<Int>
+
+    fun preload() {}
 }
