@@ -49,6 +49,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.localllmvoice.domain.model.ConversationTopic
 import com.example.localllmvoice.domain.model.ConversationTopics
+import com.example.localllmvoice.domain.model.TopicCategory
 import com.example.localllmvoice.ui.components.AnimatedBrainIcon
 import com.example.localllmvoice.ui.theme.LocalLLMVoiceTheme
 
@@ -125,12 +126,17 @@ private fun DashboardContent(
                 TopicSectionHeader(canStartConversation = uiState.canStartConversation)
             }
 
-            items(uiState.topics) { topic ->
-                TopicCard(
-                    topic = topic,
-                    enabled = uiState.canStartConversation,
-                    onClick = { onTopicSelected(topic) },
-                )
+            uiState.categories.forEach { category ->
+                item(key = "cat_${category.id}") {
+                    CategorySectionHeader(category = category)
+                }
+                items(category.topics, key = { "${category.id}_${it.id}" }) { topic ->
+                    TopicCard(
+                        topic = topic,
+                        enabled = uiState.canStartConversation,
+                        onClick = { onTopicSelected(topic) },
+                    )
+                }
             }
         }
     }
@@ -285,6 +291,46 @@ private fun DashboardMessageCard(
 }
 
 @Composable
+private fun CategorySectionHeader(
+    category: TopicCategory,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = category.title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            if (category.isFree) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                ) {
+                    Text(
+                        text = "Free",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
+        Text(
+            text = category.description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun TopicSectionHeader(
     canStartConversation: Boolean,
     modifier: Modifier = Modifier,
@@ -392,7 +438,7 @@ private fun DashboardContentReadyPreview() {
     LocalLLMVoiceTheme {
         DashboardContent(
             uiState = DashboardUiState(
-                topics = ConversationTopics.all.take(3),
+                categories = ConversationTopics.categories.take(2),
                 modelStatus = null,
                 errorMessage = null,
                 isCardVisible = false,
@@ -408,7 +454,7 @@ private fun DashboardContentLoadingPreview() {
     LocalLLMVoiceTheme {
         DashboardContent(
             uiState = DashboardUiState(
-                topics = ConversationTopics.all.take(3),
+                categories = ConversationTopics.categories.take(2),
                 modelStatus = DashboardUiState.UiModelState.Loading,
                 errorMessage = null,
                 isCardVisible = true,
