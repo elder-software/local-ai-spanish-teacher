@@ -7,6 +7,7 @@ import com.example.localllmvoice.domain.model.ConversationTopic
 import com.example.localllmvoice.ui.chat.ChatViewModel
 import com.example.localllmvoice.ui.dashboard.DashboardViewModel
 import com.example.localllmvoice.ui.feedback.FeedbackViewModel
+import com.example.localllmvoice.ui.onboarding.OnboardingDownloadViewModel
 
 class DashboardViewModelFactory(
     private val appContainer: AppContainer,
@@ -49,6 +50,18 @@ class FeedbackViewModelFactory(
                 llmRepository = appContainer.gemmaLlmRepository,
                 feedbackSessionStore = appContainer.feedbackSessionStore,
             ) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+class OnboardingDownloadViewModelFactory(
+    private val appContainer: AppContainer,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(OnboardingDownloadViewModel::class.java)) {
+            return OnboardingDownloadViewModel(appContainer.downloadAllModelsUseCase) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -6,6 +6,7 @@ import com.example.localllmvoice.data.gemma.GemmaModelConfig
 import com.example.localllmvoice.data.repository.GemmaModelStatus
 import com.example.localllmvoice.data.repository.ModelAvailability
 import com.example.localllmvoice.di.AppContainer
+import com.example.localllmvoice.domain.CurrentDownload
 import com.example.localllmvoice.domain.DownloadAllModelsEvent
 import com.example.localllmvoice.domain.model.ConversationTopics
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,29 +76,18 @@ class DashboardViewModel(
             }
             appContainer.downloadAllModelsUseCase().collect { event ->
                 when (event) {
-                    is DownloadAllModelsEvent.GemmaProgress -> {
-                        _uiState.update {
-                            it.copy(
-                                isDownloading = true,
-                                modelStatus = GemmaModelStatus.DOWNLOADING,
-                                downloadProgressBytes = event.downloadedBytes,
-                                downloadTotalBytes = event.totalBytes,
-                                modelStatusMessage = formatDownloadMessage(
-                                    event.downloadedBytes,
-                                    event.totalBytes,
-                                ),
-                            )
+                    is DownloadAllModelsEvent.Progress -> {
+                        val message = when (event.currentDownload) {
+                            CurrentDownload.Gemma -> "Downloading brain (AI model)… ${event.progressPercent}%"
+                            CurrentDownload.STT -> "Downloading ears (Spanish voice recognition)… ${event.progressPercent}%"
                         }
-                    }
-
-                    is DownloadAllModelsEvent.SttProgress -> {
                         _uiState.update {
                             it.copy(
                                 isDownloading = true,
                                 modelStatus = GemmaModelStatus.DOWNLOADING,
                                 downloadProgressBytes = event.progressPercent.toLong(),
                                 downloadTotalBytes = 100L,
-                                modelStatusMessage = "Downloading Spanish STT model… ${event.progressPercent}%",
+                                modelStatusMessage = message,
                             )
                         }
                     }

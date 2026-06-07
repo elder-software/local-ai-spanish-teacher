@@ -22,6 +22,7 @@ import com.example.localllmvoice.ui.feedback.FeedbackViewModel
 import com.example.localllmvoice.ui.onboarding.OnboardingWelcomeScreen
 import com.example.localllmvoice.ui.onboarding.OnboardingPaywallScreen
 import com.example.localllmvoice.ui.onboarding.OnboardingDownloadScreen
+import com.example.localllmvoice.ui.onboarding.OnboardingDownloadViewModel
 
 object Routes {
     const val DASHBOARD = "dashboard"
@@ -70,7 +71,11 @@ fun SoloTalkNavHost(
                 )
             }
             composable(Routes.ONBOARDING_DOWNLOAD) {
+                val viewModel: OnboardingDownloadViewModel = viewModel(
+                    factory = OnboardingDownloadViewModelFactory(appContainer),
+                )
                 OnboardingDownloadScreen(
+                    viewModel = viewModel,
                     onFinished = {
                         appContainer.onboardingPreferences.setComplete(true)
                         navController.navigate(Routes.DASHBOARD) {
