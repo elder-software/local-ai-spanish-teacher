@@ -198,6 +198,44 @@ class ChatViewModel(
         }
     }
 
+    fun translateMessage(messageId: String) {
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        val message = state.messages.find { it.id == messageId } ?: return
+        if (message.translatedContent != null || message.isTranslating) return
+
+        val updatedMessages = state.messages.map { msg ->
+            if (msg.id == messageId) msg.copy(isTranslating = true) else msg
+        }
+        _uiState.value = state.copy(messages = updatedMessages)
+
+        viewModelScope.launch {
+            try {
+                val targetLanguage = java.util.Locale.getDefault().displayLanguage.ifBlank { "English" }
+                val translation = llmRepository.translateText(message.content, targetLanguage)
+                
+                val current = _uiState.value as? ChatUiState.ActiveConversation ?: return@launch
+                val finalMessages = current.messages.map { msg ->
+                    if (msg.id == messageId) {
+                        msg.copy(isTranslating = false, translatedContent = translation)
+                    } else {
+                        msg
+                    }
+                }
+                _uiState.value = current.copy(messages = finalMessages)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                val current = _uiState.value as? ChatUiState.ActiveConversation ?: return@launch
+                val finalMessages = current.messages.map { msg ->
+                    if (msg.id == messageId) msg.copy(isTranslating = false) else msg
+                }
+                _uiState.value = current.copy(
+                    messages = finalMessages,
+                    errorMessage = "Translation failed: ${e.message}"
+                )
+            }
+        }
+    }
+
     override fun onCleared() {
         generationJob?.cancel()
         recognitionJob?.cancel()

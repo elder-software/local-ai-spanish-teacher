@@ -87,6 +87,7 @@ fun ChatScreen(
                 onCancelVoiceInput = viewModel::cancelVoiceInput,
                 onDismissError = viewModel::dismissError,
                 onToggleSuggestion = viewModel::toggleSuggestion,
+                onTranslateClick = viewModel::translateMessage,
                 modifier = modifier,
             )
         }
@@ -103,6 +104,7 @@ private fun ActiveChatContent(
     onCancelVoiceInput: () -> Unit,
     onDismissError: () -> Unit,
     onToggleSuggestion: () -> Unit,
+    onTranslateClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
@@ -155,7 +157,11 @@ private fun ActiveChatContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
-                        ChatMessageList(messages = state.messages)
+                        ChatMessageList(
+                            messages = state.messages,
+                            onTranslateClick = onTranslateClick,
+                            isTranslateEnabled = !state.isGenerating
+                        )
                     }
 
                     if (state.isGenerating) {

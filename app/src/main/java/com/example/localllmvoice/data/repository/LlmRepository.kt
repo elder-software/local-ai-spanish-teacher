@@ -48,5 +48,7 @@ interface LlmRepository {
         avoidSuggestions: List<String> = emptyList(),
     ): String
 
+    suspend fun translateText(text: String, targetLanguage: String): String
+
     suspend fun resetConversation()
 }

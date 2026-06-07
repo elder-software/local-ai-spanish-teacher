@@ -3,11 +3,18 @@ package com.example.localllmvoice.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +24,8 @@ import com.example.localllmvoice.domain.model.ChatMessage
 @Composable
 fun ChatBubble(
     message: ChatMessage,
+    onTranslateClick: () -> Unit,
+    isTranslateEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start
@@ -52,12 +61,49 @@ fun ChatBubble(
             shape = MaterialTheme.shapes.large,
             modifier = Modifier.padding(vertical = 4.dp),
         ) {
-            Text(
-                text = message.content,
-                style = MaterialTheme.typography.bodyLarge,
-                color = textColor,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = textColor,
+                )
+                
+                if (message.translatedContent != null) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        color = textColor.copy(alpha = 0.15f)
+                    )
+                    Text(
+                        text = message.translatedContent,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = textColor.copy(alpha = 0.8f),
+                    )
+                } else {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (message.isTranslating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = textColor
+                        )
+                    } else {
+                        TextButton(
+                            onClick = onTranslateClick,
+                            enabled = isTranslateEnabled,
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.height(24.dp)
+                        ) {
+                            Text(
+                                text = "Translate",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (isTranslateEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -65,6 +111,8 @@ fun ChatBubble(
 @Composable
 fun ChatMessageList(
     messages: List<ChatMessage>,
+    onTranslateClick: (String) -> Unit,
+    isTranslateEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -72,7 +120,11 @@ fun ChatMessageList(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         messages.forEach { message ->
-            ChatBubble(message = message)
+            ChatBubble(
+                message = message,
+                onTranslateClick = { onTranslateClick(message.id) },
+                isTranslateEnabled = isTranslateEnabled,
+            )
         }
     }
 }

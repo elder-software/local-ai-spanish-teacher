@@ -338,6 +338,59 @@ class GemmaLlmRepository(
         }
     }
 
+    override suspend fun translateText(text: String, targetLanguage: String): String {
+        val rawText = text.trim()
+        if (rawText.isEmpty()) return rawText
+
+        return conversationMutex.withLock {
+            val modelPath = modelStore.resolveEngineModelPath().getOrThrow()
+            engineManager.initialize(modelPath)
+            val translateSampler = SamplerConfig(
+                topK = 1,
+                topP = 0.1,
+                temperature = 0.0,
+            )
+            val systemPrompt = """
+                Eres un traductor profesional y preciso. Tu única tarea es traducir el texto proporcionado al idioma: $targetLanguage.
+                
+                REGLAS ESTRICTAS:
+                1. Traduce el texto de entrada de manera exacta y natural al idioma especificado.
+                2. Devuelve ÚNICAMENTE la traducción. No agregues explicaciones, notas, comentarios, comillas adicionales ni introducciones.
+                3. Conserva el tono y el significado del texto original.
+            """.trimIndent()
+            
+            val conversation = replaceActiveConversation(
+                systemPrompt = systemPrompt,
+                samplerConfig = translateSampler,
+            )
+
+            try {
+                val parser = GemmaStreamParser()
+                var previousText = ""
+                val translated = StringBuilder()
+
+                conversation.sendMessageAsync(Contents.of(Content.Text(rawText))).collect { message ->
+                    val text = stripLeadingAssistantLabel(message.textContent())
+                    val delta = if (text.startsWith(previousText)) {
+                        text.removePrefix(previousText)
+                    } else {
+                        text
+                    }
+                    previousText = text
+                    parser.processToken(delta) { visible ->
+                        if (visible.isNotEmpty()) {
+                            translated.append(visible)
+                        }
+                    }
+                }
+
+                translated.toString().trim().ifEmpty { rawText }
+            } finally {
+                closeActiveConversation()
+            }
+        }
+    }
+
     override suspend fun resetConversation() {
         conversationMutex.withLock {
             closeActiveConversation()

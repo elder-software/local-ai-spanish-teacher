@@ -7,6 +7,8 @@ data class ChatMessage(
     val content: String,
     val isUser: Boolean,
     val timestamp: Long = System.currentTimeMillis(),
+    val translatedContent: String? = null,
+    val isTranslating: Boolean = false,
 )
 
 data class ConversationTopic(
