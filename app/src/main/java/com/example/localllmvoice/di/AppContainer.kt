@@ -8,6 +8,7 @@ import com.example.localllmvoice.data.audio.VoskSpeechToTextManager
 import com.example.localllmvoice.data.audio.WhisperSpeechToTextManager
 import com.example.localllmvoice.data.onboarding.OnboardingPreferences
 import com.example.localllmvoice.data.repository.GemmaLlmRepository
+import com.example.localllmvoice.domain.DecideStartupStateUseCase
 import com.example.localllmvoice.domain.DownloadAllModelsUseCase
 import com.example.localllmvoice.domain.model.FeedbackSessionStore
 
@@ -22,6 +23,11 @@ class AppContainer(context: Context) {
     val gemmaLlmRepository = GemmaLlmRepository(appContext)
     val downloadAllModelsUseCase = DownloadAllModelsUseCase(gemmaLlmRepository, speechToTextManager)
     val onboardingPreferences = OnboardingPreferences(appContext)
+    val decideStartupStateUseCase = DecideStartupStateUseCase(
+        onboardingPreferences = onboardingPreferences,
+        gemmaLlmRepository = gemmaLlmRepository,
+        speechToTextEngine = speechToTextManager,
+    )
 
     init {
         speechToTextManager.preload()

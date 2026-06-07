@@ -36,6 +36,34 @@ class GemmaLlmRepository(
     private val conversationMutex = Mutex()
     private var activeConversation: Conversation? = null
 
+    fun checkDownloadedModelAvailability(): ModelAvailability {
+        modelStore.ensureModelDirectory()
+        val capability = capabilityChecker.evaluate()
+
+        if (!capability.canRunConfiguredModel) {
+            return ModelAvailability(
+                status = GemmaModelStatus.INSUFFICIENT_DEVICE,
+                message = "Device below recommended specs for ${GemmaModelConfig.MODEL_LABEL}",
+                deviceCapability = capability,
+            )
+        }
+
+        if (!modelStore.isModelReady()) {
+            return ModelAvailability(
+                status = GemmaModelStatus.DOWNLOAD_REQUIRED,
+                message = "Download ${GemmaModelConfig.MODEL_LABEL} (~${GemmaModelConfig.ESTIMATED_SIZE_MB} MB) to run offline",
+                deviceCapability = capability,
+                totalBytes = GemmaModelConfig.ESTIMATED_SIZE_BYTES,
+            )
+        }
+
+        return ModelAvailability(
+            status = GemmaModelStatus.READY,
+            message = "${GemmaModelConfig.MODEL_LABEL} downloaded",
+            deviceCapability = capability,
+        )
+    }
+
     override fun checkModelAvailability(): Flow<ModelAvailability> = flow {
         modelStore.ensureModelDirectory()
         val capability = capabilityChecker.evaluate()

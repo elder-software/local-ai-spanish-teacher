@@ -12,6 +12,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.localllmvoice.di.AppContainer
+import com.example.localllmvoice.domain.StartupState
 import com.example.localllmvoice.domain.model.ConversationTopics
 import com.example.localllmvoice.ui.chat.ChatScreen
 import com.example.localllmvoice.ui.chat.ChatViewModel
@@ -29,9 +30,11 @@ object Routes {
     const val CHAT = "chat/{topicId}"
     const val FEEDBACK = "feedback"
     const val ONBOARDING_GRAPH = "onboarding"
+    const val ONBOARDING_DOWNLOAD_GRAPH = "onboarding/download_graph"
     const val ONBOARDING_WELCOME = "onboarding/welcome"
     const val ONBOARDING_PAYWALL = "onboarding/paywall"
     const val ONBOARDING_DOWNLOAD = "onboarding/download"
+    const val ONBOARDING_DOWNLOAD_RECOVERY = "onboarding/download_recovery"
 
     fun chat(topicId: String) = "chat/$topicId"
 }
@@ -42,9 +45,8 @@ fun SoloTalkNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
-    val startDestination = remember {
-        if (appContainer.onboardingPreferences.isComplete()) Routes.DASHBOARD
-        else Routes.ONBOARDING_GRAPH
+    val startDestination = remember(appContainer) {
+        appContainer.decideStartupStateUseCase().startDestination()
     }
 
     NavHost(
@@ -80,6 +82,26 @@ fun SoloTalkNavHost(
                         appContainer.onboardingPreferences.setComplete(true)
                         navController.navigate(Routes.DASHBOARD) {
                             popUpTo(Routes.ONBOARDING_GRAPH) { inclusive = true }
+                        }
+                    }
+                )
+            }
+        }
+
+        navigation(
+            startDestination = Routes.ONBOARDING_DOWNLOAD_RECOVERY,
+            route = Routes.ONBOARDING_DOWNLOAD_GRAPH,
+        ) {
+            composable(Routes.ONBOARDING_DOWNLOAD_RECOVERY) {
+                val viewModel: OnboardingDownloadViewModel = viewModel(
+                    factory = OnboardingDownloadViewModelFactory(appContainer),
+                )
+                OnboardingDownloadScreen(
+                    viewModel = viewModel,
+                    onFinished = {
+                        appContainer.onboardingPreferences.setComplete(true)
+                        navController.navigate(Routes.DASHBOARD) {
+                            popUpTo(Routes.ONBOARDING_DOWNLOAD_GRAPH) { inclusive = true }
                         }
                     }
                 )
@@ -145,4 +167,10 @@ fun SoloTalkNavHost(
             )
         }
     }
+}
+
+private fun StartupState.startDestination(): String = when (this) {
+    StartupState.NeedsOnboarding -> Routes.ONBOARDING_GRAPH
+    StartupState.NeedsModelDownload -> Routes.ONBOARDING_DOWNLOAD_GRAPH
+    StartupState.ReadyForDashboard -> Routes.DASHBOARD
 }

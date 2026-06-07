@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -28,11 +29,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.localllmvoice.data.gemma.DeviceCapability
+import com.example.localllmvoice.data.repository.GemmaModelStatus
 import com.example.localllmvoice.domain.model.ConversationTopic
+import com.example.localllmvoice.ui.components.AnimatedBrainIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,6 +83,7 @@ fun DashboardScreen(
             ) {
                 item(key = "status") {
                     ModelStatusCard(
+                        modelStatus = uiState.modelStatus,
                         message = uiState.modelStatusMessage,
                         backend = uiState.activeBackend,
                         capability = uiState.deviceCapability,
@@ -123,6 +128,7 @@ fun DashboardScreen(
 
 @Composable
 private fun ModelStatusCard(
+    modelStatus: GemmaModelStatus,
     message: String,
     backend: String?,
     capability: DeviceCapability?,
@@ -137,6 +143,29 @@ private fun ModelStatusCard(
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth(),
     ) {
+        if (modelStatus == GemmaModelStatus.INITIALIZING) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AnimatedBrainIcon(modifier = Modifier.size(56.dp))
+                Text(
+                    text = "Warming up your tutor...",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            return@OutlinedCard
+        }
+
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
