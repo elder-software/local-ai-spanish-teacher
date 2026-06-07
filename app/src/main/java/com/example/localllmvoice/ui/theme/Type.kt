@@ -1,38 +1,39 @@
 package com.example.localllmvoice.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.googlefonts.Font
-import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.example.localllmvoice.R
 
-// Downloadable fonts configuration
-private val fontProvider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs
+// Libre Caslon Text family for headers (literary elegance). Bundled with the APK as a
+// variable font (weight axis 400-700), so the exact weights below render without any
+// network dependency or downloadable-font provider.
+@OptIn(ExperimentalTextApi::class)
+private fun libreCaslon(weight: FontWeight) = Font(
+    resId = R.font.libre_caslon_text,
+    weight = weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
 )
 
-// Libre Caslon Text FontFamily for headers (Updated June 2026 for literary elegance)
-private val LibreCaslonTextFont = GoogleFont("Libre Caslon Text")
 val LibreCaslonTextFontFamily = FontFamily(
-    Font(googleFont = LibreCaslonTextFont, fontProvider = fontProvider, weight = FontWeight.Normal),
-    Font(googleFont = LibreCaslonTextFont, fontProvider = fontProvider, weight = FontWeight.Medium),
-    Font(googleFont = LibreCaslonTextFont, fontProvider = fontProvider, weight = FontWeight.SemiBold),
-    Font(googleFont = LibreCaslonTextFont, fontProvider = fontProvider, weight = FontWeight.Bold)
+    libreCaslon(FontWeight.Normal),
+    libreCaslon(FontWeight.Medium),
+    libreCaslon(FontWeight.SemiBold),
+    libreCaslon(FontWeight.Bold),
 )
 
-// DM Sans FontFamily for body text
-private val DmSansFont = GoogleFont("DM Sans")
+// DM Sans family for body text, bundled with the APK as static instances per weight.
 val DmSansFontFamily = FontFamily(
-    Font(googleFont = DmSansFont, fontProvider = fontProvider, weight = FontWeight.Normal),
-    Font(googleFont = DmSansFont, fontProvider = fontProvider, weight = FontWeight.Medium),
-    Font(googleFont = DmSansFont, fontProvider = fontProvider, weight = FontWeight.SemiBold),
-    Font(googleFont = DmSansFont, fontProvider = fontProvider, weight = FontWeight.Bold)
+    Font(R.font.dm_sans_regular, FontWeight.Normal),
+    Font(R.font.dm_sans_medium, FontWeight.Medium),
+    Font(R.font.dm_sans_semibold, FontWeight.SemiBold),
+    Font(R.font.dm_sans_bold, FontWeight.Bold),
 )
 
 // Set of Material typography styles based on design.md
