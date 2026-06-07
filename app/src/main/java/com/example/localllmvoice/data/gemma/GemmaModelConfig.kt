@@ -31,6 +31,11 @@ object GemmaModelConfig {
     const val ANALYSIS_SAMPLER_TOP_P = 0.9
     const val ANALYSIS_SAMPLER_TEMPERATURE = 0.3
 
+    // Slightly creative sampling so retries produce varied learner suggestions.
+    const val SUGGESTION_SAMPLER_TOP_K = 40
+    const val SUGGESTION_SAMPLER_TOP_P = 0.92
+    const val SUGGESTION_SAMPLER_TEMPERATURE = 0.85
+
     val ESTIMATED_SIZE_MB: Long
         get() = ESTIMATED_SIZE_BYTES / 1_000_000
 }

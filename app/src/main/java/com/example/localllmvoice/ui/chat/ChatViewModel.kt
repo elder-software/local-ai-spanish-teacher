@@ -28,6 +28,8 @@ class ChatViewModel(
     private val streamParser = GemmaStreamParser()
     private var generationJob: Job? = null
     private var recognitionJob: Job? = null
+    private var suggestionJob: Job? = null
+    private var suggestionsThisTurn: List<String> = emptyList()
     private var discardPendingTranscript = false
     private var systemPrompt: String = topic.systemPrompt
     private var handingOffToFeedback = false
@@ -48,6 +50,7 @@ class ChatViewModel(
         systemPrompt = selected.systemPrompt
         streamParser.reset()
         textToSpeechManager.stop()
+        suggestionsThisTurn = emptyList()
         _uiState.value = ChatUiState.ActiveConversation(
             messages = listOf(
                 ChatMessage(
@@ -60,6 +63,75 @@ class ChatViewModel(
         textToSpeechManager.enqueue(selected.openingMessage)
     }
 
+    fun toggleSuggestion() {
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        if (state.isRecording || state.isTranscribing || state.isGenerating) return
+
+        if (state.isGeneratingSuggestion) {
+            suggestionJob?.cancel()
+            suggestionJob = null
+            _uiState.value = clearSuggestion(state)
+            return
+        }
+
+        if (state.isSuggestionVisible) {
+            requestSuggestion(state, refresh = true)
+            return
+        }
+
+        requestSuggestion(state, refresh = false)
+    }
+
+    private fun requestSuggestion(
+        state: ChatUiState.ActiveConversation,
+        refresh: Boolean,
+    ) {
+        _uiState.value = state.copy(
+            isSuggestionVisible = true,
+            isGeneratingSuggestion = true,
+            suggestedReply = if (refresh) state.suggestedReply else null,
+            errorMessage = null,
+        )
+
+        suggestionJob = viewModelScope.launch {
+            try {
+                val currentState = _uiState.value as? ChatUiState.ActiveConversation ?: return@launch
+                val suggestion = llmRepository.generateNextReplySuggestion(
+                    topicTitle = currentState.currentTopic,
+                    conversationContext = formatConversationContext(currentState.messages),
+                    avoidSuggestions = suggestionsThisTurn,
+                )
+                val trimmed = suggestion.trim()
+                val latest = _uiState.value as? ChatUiState.ActiveConversation ?: return@launch
+                if (!latest.isSuggestionVisible && !latest.isGeneratingSuggestion) return@launch
+                suggestionsThisTurn = suggestionsThisTurn + trimmed
+                _uiState.value = latest.copy(
+                    suggestedReply = trimmed,
+                    isGeneratingSuggestion = false,
+                    isSuggestionVisible = true,
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                val current = _uiState.value as? ChatUiState.ActiveConversation ?: return@launch
+                _uiState.value = current.copy(
+                    isGeneratingSuggestion = false,
+                    isSuggestionVisible = false,
+                    suggestedReply = null,
+                    errorMessage = "Could not generate a suggestion",
+                )
+            } finally {
+                suggestionJob = null
+            }
+        }
+    }
+
+    fun dismissSuggestion() {
+        suggestionJob?.cancel()
+        suggestionJob = null
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        _uiState.value = clearSuggestion(state)
+    }
+
     fun toggleRecording() {
         val state = _uiState.value
         if (state !is ChatUiState.ActiveConversation || state.isGenerating || state.isTranscribing) return
@@ -67,7 +139,10 @@ class ChatViewModel(
         if (state.isRecording) {
             // Reflect the finalizing phase immediately so the UI doesn't appear frozen
             // while the recogniser flushes and settles the final transcript.
-            _uiState.value = state.copy(isRecording = false, isTranscribing = true)
+            _uiState.value = clearSuggestion(
+                state.copy(isRecording = false, isTranscribing = true),
+            )
+            suggestionsThisTurn = emptyList()
             speechToTextManager.stopListening()
         } else {
             startListening(state)
@@ -91,6 +166,7 @@ class ChatViewModel(
     fun endConversation() {
         generationJob?.cancel()
         recognitionJob?.cancel()
+        suggestionJob?.cancel()
         textToSpeechManager.stop()
         if (!handingOffToFeedback) {
             viewModelScope.launch {
@@ -125,6 +201,7 @@ class ChatViewModel(
     override fun onCleared() {
         generationJob?.cancel()
         recognitionJob?.cancel()
+        suggestionJob?.cancel()
         textToSpeechManager.stop()
         if (!handingOffToFeedback) {
             runBlocking {
@@ -240,12 +317,17 @@ class ChatViewModel(
                 isUser = true,
             )
             val messagesWithUser = state.messages + userMessage
-            _uiState.value = state.copy(
-                messages = messagesWithUser,
-                isRecording = false,
-                isTranscribing = false,
-                isGenerating = true,
-                interimTranscript = null,
+            suggestionJob?.cancel()
+            suggestionJob = null
+            suggestionsThisTurn = emptyList()
+            _uiState.value = clearSuggestion(
+                state.copy(
+                    messages = messagesWithUser,
+                    isRecording = false,
+                    isTranscribing = false,
+                    isGenerating = true,
+                    interimTranscript = null,
+                ),
             )
 
             val assistantMessageId = ChatMessage(isUser = false, content = "").id
@@ -330,6 +412,13 @@ class ChatViewModel(
             errorMessage = message,
         )
     }
+
+    private fun clearSuggestion(state: ChatUiState.ActiveConversation): ChatUiState.ActiveConversation =
+        state.copy(
+            suggestedReply = null,
+            isSuggestionVisible = false,
+            isGeneratingSuggestion = false,
+        )
 
     private fun formatConversationContext(messages: List<ChatMessage>): String =
         messages.joinToString(separator = "\n") { message ->

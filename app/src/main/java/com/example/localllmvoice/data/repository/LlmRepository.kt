@@ -42,5 +42,11 @@ interface LlmRepository {
 
     suspend fun punctuateTranscript(transcript: String): String
 
+    suspend fun generateNextReplySuggestion(
+        topicTitle: String,
+        conversationContext: String,
+        avoidSuggestions: List<String> = emptyList(),
+    ): String
+
     suspend fun resetConversation()
 }

@@ -26,11 +26,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -84,6 +86,7 @@ fun ChatScreen(
                 onToggleRecording = viewModel::toggleRecording,
                 onCancelVoiceInput = viewModel::cancelVoiceInput,
                 onDismissError = viewModel::dismissError,
+                onToggleSuggestion = viewModel::toggleSuggestion,
                 modifier = modifier,
             )
         }
@@ -99,6 +102,7 @@ private fun ActiveChatContent(
     onToggleRecording: () -> Unit,
     onCancelVoiceInput: () -> Unit,
     onDismissError: () -> Unit,
+    onToggleSuggestion: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
@@ -192,8 +196,12 @@ private fun ActiveChatContent(
                         isRecording = state.isRecording,
                         isTranscribing = state.isTranscribing,
                         enabled = !state.isGenerating && !state.isTranscribing,
+                        suggestedReply = state.suggestedReply,
+                        isSuggestionVisible = state.isSuggestionVisible,
+                        isGeneratingSuggestion = state.isGeneratingSuggestion,
                         onToggleRecording = onToggleRecording,
                         onCancelVoiceInput = onCancelVoiceInput,
+                        onToggleSuggestion = onToggleSuggestion,
                     )
                 }
             }
@@ -262,6 +270,52 @@ private fun MicDebugPanel(
     }
 }
 
+@Composable
+private fun SuggestionCard(
+    suggestedReply: String?,
+    isGeneratingSuggestion: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp,
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "Try saying",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (isGeneratingSuggestion) {
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Text(
+                        text = "Thinking of a suggestion...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                Text(
+                    text = suggestedReply.orEmpty(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+    }
+}
+
 private enum class RecordingPhase { Idle, Recording, Transcribing }
 
 @Composable
@@ -269,8 +323,12 @@ private fun RecordingControls(
     isRecording: Boolean,
     isTranscribing: Boolean,
     enabled: Boolean,
+    suggestedReply: String?,
+    isSuggestionVisible: Boolean,
+    isGeneratingSuggestion: Boolean,
     onToggleRecording: () -> Unit,
     onCancelVoiceInput: () -> Unit,
+    onToggleSuggestion: () -> Unit,
 ) {
     val phase = when {
         isRecording -> RecordingPhase.Recording
@@ -278,53 +336,87 @@ private fun RecordingControls(
         else -> RecordingPhase.Idle
     }
 
-    AnimatedContent(
-        targetState = phase,
-        transitionSpec = {
-            fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 4 } togetherWith
-                fadeOut(tween(180)) + slideOutHorizontally(tween(180)) { -it / 4 }
-        },
-        label = "recording_controls",
-    ) { currentPhase ->
-        when (currentPhase) {
-            RecordingPhase.Recording -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedButton(
-                        onClick = onCancelVoiceInput,
-                        modifier = Modifier
-                            .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp),
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        AnimatedVisibility(
+            visible = isSuggestionVisible,
+            enter = fadeIn(tween(200)) + slideInHorizontally(tween(200)) { -it / 6 },
+            exit = fadeOut(tween(160)) + slideOutHorizontally(tween(160)) { -it / 6 },
+        ) {
+            SuggestionCard(
+                suggestedReply = suggestedReply,
+                isGeneratingSuggestion = isGeneratingSuggestion,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+
+        AnimatedContent(
+            targetState = phase,
+            transitionSpec = {
+                fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 4 } togetherWith
+                    fadeOut(tween(180)) + slideOutHorizontally(tween(180)) { -it / 4 }
+            },
+            label = "recording_controls",
+        ) { currentPhase ->
+            when (currentPhase) {
+                RecordingPhase.Recording -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text("Cancel")
+                        OutlinedButton(
+                            onClick = onCancelVoiceInput,
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp),
+                        ) {
+                            Text("Cancel")
+                        }
+                        RecordingButton(
+                            isRecording = true,
+                            enabled = enabled,
+                            onClick = onToggleRecording,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
-                    RecordingButton(
-                        isRecording = true,
-                        enabled = enabled,
-                        onClick = onToggleRecording,
-                        modifier = Modifier.weight(1f),
-                    )
                 }
-            }
 
-            RecordingPhase.Transcribing -> {
-                TranscribingButton(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-            }
+                RecordingPhase.Transcribing -> {
+                    TranscribingButton()
+                }
 
-            RecordingPhase.Idle -> {
-                RecordingButton(
-                    isRecording = false,
-                    enabled = enabled,
-                    onClick = onToggleRecording,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
+                RecordingPhase.Idle -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        RecordingButton(
+                            isRecording = false,
+                            enabled = enabled,
+                            onClick = onToggleRecording,
+                            modifier = Modifier.weight(1f),
+                        )
+                        FilledTonalIconButton(
+                            onClick = onToggleSuggestion,
+                            enabled = enabled,
+                            modifier = Modifier.size(48.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lightbulb,
+                                contentDescription = when {
+                                    isGeneratingSuggestion -> "Cancel suggestion"
+                                    isSuggestionVisible -> "Refresh suggestion"
+                                    else -> "Show suggested reply"
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -379,7 +471,6 @@ private fun RecordingButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
-            .fillMaxWidth()
             .defaultMinSize(minHeight = 48.dp),
     ) {
         Icon(

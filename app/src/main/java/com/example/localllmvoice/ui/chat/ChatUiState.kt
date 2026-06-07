@@ -14,5 +14,8 @@ sealed interface ChatUiState {
         val interimTranscript: String? = null,
         val errorMessage: String? = null,
         val inputLevel: Float = 0f,
+        val suggestedReply: String? = null,
+        val isSuggestionVisible: Boolean = false,
+        val isGeneratingSuggestion: Boolean = false,
     ) : ChatUiState
 }

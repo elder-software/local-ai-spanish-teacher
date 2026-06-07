@@ -231,6 +231,69 @@ class GemmaLlmRepository(
         }
     }.flowOn(Dispatchers.Default)
 
+    override suspend fun generateNextReplySuggestion(
+        topicTitle: String,
+        conversationContext: String,
+        avoidSuggestions: List<String>,
+    ): String = conversationMutex.withLock {
+        val modelPath = modelStore.resolveEngineModelPath().getOrThrow()
+        engineManager.initialize(modelPath)
+        val suggestionSampler = SamplerConfig(
+            topK = GemmaModelConfig.SUGGESTION_SAMPLER_TOP_K,
+            topP = GemmaModelConfig.SUGGESTION_SAMPLER_TOP_P,
+            temperature = GemmaModelConfig.SUGGESTION_SAMPLER_TEMPERATURE,
+        )
+        val conversation = replaceActiveConversation(
+            systemPrompt = NEXT_REPLY_SUGGESTION_SYSTEM_PROMPT,
+            initialMessages = emptyList(),
+            samplerConfig = suggestionSampler,
+        )
+
+        val userPayload = buildString {
+            appendLine("Tema de práctica: ${topicTitle.trim()}")
+            appendLine()
+            appendLine(
+                "En la transcripción, \"Partner\" es el personaje simulado y \"Learner\" es el estudiante humano " +
+                    "que interpreta a la otra persona de la situación.",
+            )
+            appendLine()
+            appendLine("Transcripción hasta ahora:")
+            append(conversationContext.trim().ifEmpty { "(La conversación acaba de empezar.)" })
+            if (avoidSuggestions.isNotEmpty()) {
+                appendLine()
+                appendLine("Sugerencias ya mostradas (propón algo diferente):")
+                avoidSuggestions.forEach { suggestion ->
+                    appendLine("- ${suggestion.trim()}")
+                }
+            }
+        }
+
+        try {
+            val parser = GemmaStreamParser()
+            var previousText = ""
+            val suggestion = StringBuilder()
+
+            conversation.sendMessageAsync(Contents.of(Content.Text(userPayload))).collect { message ->
+                val text = stripLeadingAssistantLabel(message.textContent())
+                val delta = if (text.startsWith(previousText)) {
+                    text.removePrefix(previousText)
+                } else {
+                    text
+                }
+                previousText = text
+                parser.processToken(delta) { visible ->
+                    if (visible.isNotEmpty()) {
+                        suggestion.append(visible)
+                    }
+                }
+            }
+
+            sanitizeSuggestion(suggestion.toString())
+        } finally {
+            closeActiveConversation()
+        }
+    }
+
     override suspend fun punctuateTranscript(transcript: String): String {
         val rawTranscript = transcript.trim()
         if (rawTranscript.isEmpty()) return rawTranscript
@@ -371,6 +434,27 @@ class GemmaLlmRepository(
             }
             .minByOrNull { it.startIndex }
 
+    private fun sanitizeSuggestion(raw: String): String {
+        val firstLine = raw
+            .lineSequence()
+            .map { line ->
+                line.trim()
+                    .removePrefix("- ")
+                    .removePrefix("• ")
+                    .removePrefix("* ")
+                    .trim('"', '\'', '«', '»')
+                    .replace(LEADING_ASSISTANT_LABEL_PATTERN, "")
+                    .trim()
+            }
+            .firstOrNull { it.isNotBlank() }
+            ?: return ""
+
+        return firstLine
+            .replace(Regex("^\\s*(?:Sugerencia|Respuesta|Try saying|Prueba diciendo)\\s*:\\s*", RegexOption.IGNORE_CASE), "")
+            .trim()
+            .trim('"', '\'', '«', '»')
+    }
+
     private fun findSentenceLimitEnd(text: String): Int? {
         var sentenceCount = 0
 
@@ -390,6 +474,29 @@ class GemmaLlmRepository(
         private const val TAG = "GemmaLlmRepository"
         private const val LEARNER_PREFIX = "Learner: "
         private const val PARTNER_PREFIX = "Partner: "
+        private val NEXT_REPLY_SUGGESTION_SYSTEM_PROMPT = """
+            Eres un coach de español independiente. Tu única tarea es sugerir qué podría decir el estudiante humano (Learner) a continuación en una conversación de práctica por roles.
+
+            CONTEXTO DE ROLES:
+            - "Partner" en la transcripción es el personaje simulado (camarero, entrevistador, recepcionista, etc.).
+            - "Learner" es el estudiante humano que interpreta a la otra persona de la situación (cliente, candidato, huésped, turista, etc.).
+            - Tu sugerencia debe ser lo que Learner diría en primera persona, NO lo que Partner diría.
+
+            REGLAS ESTRICTAS:
+            1. Devuelve UNA sola frase corta en español natural (es-ES) que Learner podría decir en voz alta como su siguiente turno.
+            2. Responde a la última frase de Partner con un pedido, una respuesta, una confirmación o información concreta del rol de Learner.
+            3. Prefiere afirmaciones, pedidos o respuestas directas. NO termines con una pregunta salvo que el rol de Learner necesite preguntar algo concreto (precio, disponibilidad, dirección).
+            4. NUNCA sugieras una frase que Partner diría al Learner. Si Partner pregunta qué quiere beber, Learner pide una bebida; Learner NO vuelve a preguntar qué comida quiere el cliente.
+            5. NO copies reglas del escenario sobre cómo debe hablar Partner. Ignora cualquier instrucción de terminar con preguntas.
+            6. NO traduzcas al inglés. NO expliques gramática. NO añadas comentarios, etiquetas ni formato de diálogo.
+            7. Si recibes sugerencias previas, propón una alternativa distinta en tono o contenido.
+            8. Usa como máximo dos frases cortas.
+
+            EJEMPLO:
+            Partner: ¿Qué te gustaría beber?
+            Sugerencia correcta: Quiero una cerveza, por favor.
+            Sugerencia incorrecta: ¿Qué tipo de comida te apetece probar?
+        """.trimIndent()
         private val TRANSCRIPT_PUNCTUATION_SYSTEM_PROMPT = """
             Eres un corrector de puntuación para transcripciones de voz en español. Tu única tarea es añadir mayúsculas y signos de puntuación (¿, ?, ¡, !, ,, .).
 
