@@ -1,12 +1,14 @@
 package com.example.localllmvoice.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.localllmvoice.di.AppContainer
@@ -17,11 +19,18 @@ import com.example.localllmvoice.ui.dashboard.DashboardScreen
 import com.example.localllmvoice.ui.dashboard.DashboardViewModel
 import com.example.localllmvoice.ui.feedback.FeedbackScreen
 import com.example.localllmvoice.ui.feedback.FeedbackViewModel
+import com.example.localllmvoice.ui.onboarding.OnboardingWelcomeScreen
+import com.example.localllmvoice.ui.onboarding.OnboardingPaywallScreen
+import com.example.localllmvoice.ui.onboarding.OnboardingDownloadScreen
 
 object Routes {
     const val DASHBOARD = "dashboard"
     const val CHAT = "chat/{topicId}"
     const val FEEDBACK = "feedback"
+    const val ONBOARDING_GRAPH = "onboarding"
+    const val ONBOARDING_WELCOME = "onboarding/welcome"
+    const val ONBOARDING_PAYWALL = "onboarding/paywall"
+    const val ONBOARDING_DOWNLOAD = "onboarding/download"
 
     fun chat(topicId: String) = "chat/$topicId"
 }
@@ -32,11 +41,46 @@ fun SoloTalkNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
+    val startDestination = remember {
+        if (appContainer.onboardingPreferences.isComplete()) Routes.DASHBOARD
+        else Routes.ONBOARDING_GRAPH
+    }
+
     NavHost(
         navController = navController,
-        startDestination = Routes.DASHBOARD,
+        startDestination = startDestination,
         modifier = modifier,
     ) {
+        navigation(
+            startDestination = Routes.ONBOARDING_WELCOME,
+            route = Routes.ONBOARDING_GRAPH,
+        ) {
+            composable(Routes.ONBOARDING_WELCOME) {
+                OnboardingWelcomeScreen(
+                    onContinue = {
+                        navController.navigate(Routes.ONBOARDING_PAYWALL)
+                    }
+                )
+            }
+            composable(Routes.ONBOARDING_PAYWALL) {
+                OnboardingPaywallScreen(
+                    onContinue = {
+                        navController.navigate(Routes.ONBOARDING_DOWNLOAD)
+                    }
+                )
+            }
+            composable(Routes.ONBOARDING_DOWNLOAD) {
+                OnboardingDownloadScreen(
+                    onFinished = {
+                        appContainer.onboardingPreferences.setComplete(true)
+                        navController.navigate(Routes.DASHBOARD) {
+                            popUpTo(Routes.ONBOARDING_GRAPH) { inclusive = true }
+                        }
+                    }
+                )
+            }
+        }
+
         composable(Routes.DASHBOARD) {
             val viewModel: DashboardViewModel = viewModel(
                 factory = DashboardViewModelFactory(appContainer),
