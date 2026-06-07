@@ -128,7 +128,7 @@ object ConversationTopics {
             description = "Chat casually about plans, hobbies, weather, and local events.",
             openingMessage = "¡Hola! Qué bien encontrarte por aquí. ¿Qué planes tienes para este fin de semana?",
             systemPrompt = buildSystemPrompt(
-                role = "Vecina simpática en una cafetería de Salamanca.",
+                role = "Vecina simpática.",
                 goal = """
                     - Mantener una conversación informal sobre planes, ocio, gustos, clima o eventos locales.
                     - Hacer preguntas naturales de seguimiento para que el estudiante practique detalles y opiniones.
