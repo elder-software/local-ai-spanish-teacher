@@ -138,3 +138,21 @@ The shape language is defined by **High Circularity**. There are no sharp corner
 - **Standard Containers:** Use 1rem (rounded-lg) for content cards.
 - **Buttons & Inputs:** Use 1.5rem (rounded-xl) or full-pill shapes to make them feel "touchable" and soft.
 - **Icons:** Use "hand-adjacent" line icons with rounded caps and corners. Avoid perfectly straight geometric lines; a subtle "imperfect" curve is preferred to reinforce the artisanal feel.
+
+## Conversation Categories
+
+The Dashboard groups conversation topics into five named categories. **Free** is always first and acts as a curated showcase for newcomers; its topics also appear in their thematic category so learners can find them again in context.
+
+| Order | Category | ID | Topics |
+| --- | --- | --- | --- |
+| 1 | Free | `free` | Ordering Food in Madrid, Talking About Your Day |
+| 2 | Travel | `travel` | Asking for Directions, Hotel Check-in, Train Station, Ordering Food in Madrid |
+| 3 | Everyday Errands | `everyday` | Clothing Store, Opening a Bank Account, Apartment Viewing |
+| 4 | Work & Goals | `work` | Job Interview Practice, Personal Goal |
+| 5 | Social & Connection | `social` | Weekend Small Talk, Family, Talking About a Hobby, Childhood Memories, Talking About Your Day |
+
+**Section layout:** Each category is a vertical stack—a header row, a one-line description, then that category's topic cards. Use **Libre Caslon Text** at `headline-md` for the category title and **DM Sans** at `body-md` in `on-surface-variant` for the description. Separate categories with `section-gap` (40px). Within a category, keep `gutter` (16px) between the header block and the first card, and between cards.
+
+**Free badge:** When a category is marked free (`isFree`), show a small full-pill label (`rounded-full`) beside the title—**Secondary Soft Amber** (`secondary-container` / `on-secondary-container`), matching the "Moment of Action" amber accent. Label copy: **Free**.
+
+**Paywall (future):** Non-free categories will later use a soft locked treatment—ambient glow plus a lock affordance—without hard-blocking browse. That treatment is out of scope for the current release; all topic cards remain tappable once the on-device tutor is ready.
