@@ -1,5 +1,6 @@
 package com.example.localllmvoice.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,15 +20,26 @@ fun ChatBubble(
     modifier: Modifier = Modifier,
 ) {
     val horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start
+    
+    // Softer background containers with a gentle tint of the brand colors
     val containerColor = if (message.isUser) {
-        MaterialTheme.colorScheme.primaryContainer
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
     } else {
-        MaterialTheme.colorScheme.secondaryContainer
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f)
     }
+    
+    // Solid brand colors for typography provide high legibility with zero glare
     val textColor = if (message.isUser) {
-        MaterialTheme.colorScheme.onPrimaryContainer
+        MaterialTheme.colorScheme.primary
     } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
+        MaterialTheme.colorScheme.secondary
+    }
+
+    // Subtle 1px borders aligned with the "Digital Traveler's Journal" tactile aesthetic
+    val borderStroke = if (message.isUser) {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+    } else {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f))
     }
 
     Column(
@@ -36,6 +48,7 @@ fun ChatBubble(
     ) {
         Surface(
             color = containerColor,
+            border = borderStroke,
             shape = MaterialTheme.shapes.large,
             modifier = Modifier.padding(vertical = 4.dp),
         ) {

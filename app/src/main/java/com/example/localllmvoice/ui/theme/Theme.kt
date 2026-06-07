@@ -11,33 +11,73 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+private val LightColorScheme = lightColorScheme(
+    primary = TerracottaPrimaryLight,
+    onPrimary = TerracottaOnPrimaryLight,
+    primaryContainer = TerracottaPrimaryContainerLight,
+    onPrimaryContainer = TerracottaOnPrimaryContainerLight,
+    inversePrimary = TerracottaInversePrimaryLight,
+    secondary = SaffronSecondaryLight,
+    onSecondary = SaffronOnSecondaryLight,
+    secondaryContainer = SaffronSecondaryContainerLight,
+    onSecondaryContainer = SaffronOnSecondaryContainerLight,
+    tertiary = WarmBrownTertiaryLight,
+    onTertiary = WarmBrownOnTertiaryLight,
+    tertiaryContainer = WarmBrownTertiaryContainerLight,
+    onTertiaryContainer = WarmBrownOnTertiaryContainerLight,
+    background = BackgroundLight,
+    onBackground = OnBackgroundLight,
+    surface = SurfaceLight,
+    onSurface = OnSurfaceLight,
+    surfaceVariant = SurfaceVariantLight,
+    onSurfaceVariant = OnSurfaceVariantLight,
+    surfaceTint = SurfaceTintLight,
+    inverseSurface = InverseSurfaceLight,
+    inverseOnSurface = InverseOnSurfaceLight,
+    outline = OutlineLight,
+    outlineVariant = OutlineVariantLight,
+    error = ErrorLight,
+    onError = OnErrorLight,
+    errorContainer = ErrorContainerLight,
+    onErrorContainer = OnErrorContainerLight
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val DarkColorScheme = darkColorScheme(
+    primary = TerracottaPrimaryDark,
+    onPrimary = TerracottaOnPrimaryDark,
+    primaryContainer = TerracottaPrimaryContainerDark,
+    onPrimaryContainer = TerracottaOnPrimaryContainerDark,
+    inversePrimary = TerracottaInversePrimaryDark,
+    secondary = SaffronSecondaryDark,
+    onSecondary = SaffronOnSecondaryDark,
+    secondaryContainer = SaffronSecondaryContainerDark,
+    onSecondaryContainer = SaffronOnSecondaryContainerDark,
+    tertiary = WarmBrownTertiaryDark,
+    onTertiary = WarmBrownOnTertiaryDark,
+    tertiaryContainer = WarmBrownTertiaryContainerDark,
+    onTertiaryContainer = WarmBrownOnTertiaryContainerDark,
+    background = BackgroundDark,
+    onBackground = OnBackgroundDark,
+    surface = SurfaceDark,
+    onSurface = OnSurfaceDark,
+    surfaceVariant = SurfaceVariantDark,
+    onSurfaceVariant = OnSurfaceVariantDark,
+    surfaceTint = SurfaceTintDark,
+    inverseSurface = InverseSurfaceDark,
+    inverseOnSurface = InverseOnSurfaceDark,
+    outline = OutlineDark,
+    outlineVariant = OutlineVariantDark,
+    error = ErrorDark,
+    onError = OnErrorDark,
+    errorContainer = ErrorContainerDark,
+    onErrorContainer = OnErrorContainerDark
 )
 
 @Composable
 fun LocalLLMVoiceTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    // Default to false to preserve the custom Mediterranean warm "Digital Traveler's Journal" palette.
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
