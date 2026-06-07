@@ -2,13 +2,11 @@ package com.example.localllmvoice.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.localllmvoice.data.gemma.GemmaModelConfig
-import com.example.localllmvoice.data.repository.GemmaModelStatus
-import com.example.localllmvoice.data.repository.ModelAvailability
 import com.example.localllmvoice.di.AppContainer
-import com.example.localllmvoice.domain.CurrentDownload
-import com.example.localllmvoice.domain.DownloadAllModelsEvent
-import com.example.localllmvoice.domain.model.ConversationTopics
+import com.example.localllmvoice.domain.model.CombinedModelStatus
+import com.example.localllmvoice.domain.model.ModelStatus
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,121 +16,71 @@ import kotlinx.coroutines.launch
 class DashboardViewModel(
     private val appContainer: AppContainer,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(
-        DashboardUiState(
-            topics = ConversationTopics.all,
-            modelStatusMessage = "Checking device and ${GemmaModelConfig.MODEL_LABEL} model…",
-        ),
-    )
+    private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+
+    private var statusJob: Job? = null
+    private var isFirstEmission = true
 
     init {
         refreshModelStatus()
     }
 
     fun refreshModelStatus() {
-        viewModelScope.launch {
-            appContainer.gemmaLlmRepository.checkModelAvailability().collect { availability ->
-                val sttReady = appContainer.speechToTextManager.isModelReady()
-                if (!sttReady && availability.status == GemmaModelStatus.READY) {
-                    _uiState.update {
-                        it.copy(
-                            modelStatus = GemmaModelStatus.DOWNLOAD_REQUIRED,
-                            modelStatusMessage = "Download Spanish STT model to run offline",
-                            activeBackend = availability.activeBackend,
-                            deviceCapability = availability.deviceCapability,
-                            downloadProgressBytes = 0L,
-                            downloadTotalBytes = 0L,
-                            errorMessage = null,
-                        )
-                    }
-                } else if (!sttReady && availability.status == GemmaModelStatus.DOWNLOAD_REQUIRED) {
-                    _uiState.update {
-                        it.copy(
-                            modelStatus = GemmaModelStatus.DOWNLOAD_REQUIRED,
-                            modelStatusMessage = "Download Gemma and Spanish STT models (~${GemmaModelConfig.ESTIMATED_SIZE_MB} MB) to run offline",
-                            activeBackend = availability.activeBackend,
-                            deviceCapability = availability.deviceCapability,
-                            downloadProgressBytes = 0L,
-                            downloadTotalBytes = 0L,
-                            errorMessage = null,
-                        )
-                    }
-                } else {
-                    applyAvailability(availability)
-                }
+        statusJob?.cancel()
+        statusJob = viewModelScope.launch {
+            appContainer.observeModelStatusUseCase().collect { combinedStatus ->
+                handleModelStatusUpdate(combinedStatus)
             }
         }
     }
 
-    fun downloadModel() {
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isDownloading = true,
-                    modelStatus = GemmaModelStatus.DOWNLOADING,
-                    errorMessage = null,
+    private fun handleModelStatusUpdate(combinedStatus: CombinedModelStatus) {
+        val modelStatus = when (combinedStatus.status) {
+            ModelStatus.READY -> DashboardUiState.UiModelState.Ready
+            ModelStatus.INITIALIZING -> DashboardUiState.UiModelState.Loading
+            else -> DashboardUiState.UiModelState.Error
+        }
+
+        val isReady = combinedStatus.status == ModelStatus.READY
+
+        if (isReady) {
+            if (isFirstEmission) {
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        modelStatus = null,
+                        errorMessage = combinedStatus.errorMessage,
+                        isCardVisible = false,
+                    )
+                }
+                isFirstEmission = false
+            } else {
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        modelStatus = modelStatus,
+                        errorMessage = combinedStatus.errorMessage,
+                        isCardVisible = true,
+                    )
+                }
+                viewModelScope.launch {
+                    delay(3000)
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            modelStatus = null,
+                            isCardVisible = false,
+                        )
+                    }
+                }
+            }
+        } else {
+            _uiState.update { currentState ->
+                currentState.copy(
+                    modelStatus = modelStatus,
+                    errorMessage = combinedStatus.errorMessage,
+                    isCardVisible = true,
                 )
             }
-            appContainer.downloadAllModelsUseCase().collect { event ->
-                when (event) {
-                    is DownloadAllModelsEvent.Progress -> {
-                        val message = when (event.currentDownload) {
-                            CurrentDownload.Gemma -> "Downloading brain (AI model)… ${event.progressPercent}%"
-                            CurrentDownload.STT -> "Downloading ears (Spanish voice recognition)… ${event.progressPercent}%"
-                        }
-                        _uiState.update {
-                            it.copy(
-                                isDownloading = true,
-                                modelStatus = GemmaModelStatus.DOWNLOADING,
-                                downloadProgressBytes = event.progressPercent.toLong(),
-                                downloadTotalBytes = 100L,
-                                modelStatusMessage = message,
-                            )
-                        }
-                    }
-
-                    DownloadAllModelsEvent.Completed -> {
-                        _uiState.update { it.copy(isDownloading = false) }
-                        refreshModelStatus()
-                    }
-
-                    is DownloadAllModelsEvent.Failed -> {
-                        _uiState.update {
-                            it.copy(
-                                isDownloading = false,
-                                modelStatus = GemmaModelStatus.ERROR,
-                                errorMessage = "Download failed",
-                                modelStatusMessage = "Download failed",
-                            )
-                        }
-                    }
-                }
-            }
+            isFirstEmission = false
         }
-    }
-
-    private fun applyAvailability(availability: ModelAvailability) {
-        _uiState.update {
-            it.copy(
-                modelStatus = availability.status,
-                modelStatusMessage = availability.message,
-                activeBackend = availability.activeBackend,
-                deviceCapability = availability.deviceCapability,
-                downloadProgressBytes = availability.downloadedBytes,
-                downloadTotalBytes = availability.totalBytes,
-                errorMessage = if (availability.status == GemmaModelStatus.ERROR) {
-                    availability.message
-                } else {
-                    null
-                },
-            )
-        }
-    }
-
-    private fun formatDownloadMessage(downloaded: Long, total: Long): String {
-        val downloadedMb = downloaded / 1_000_000
-        val totalMb = total / 1_000_000
-        return "Downloading ${GemmaModelConfig.MODEL_LABEL}… $downloadedMb / $totalMb MB"
     }
 }

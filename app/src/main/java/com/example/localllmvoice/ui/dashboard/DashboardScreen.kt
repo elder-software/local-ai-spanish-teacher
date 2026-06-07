@@ -4,6 +4,11 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,10 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
@@ -33,8 +39,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.localllmvoice.data.gemma.DeviceCapability
-import com.example.localllmvoice.data.repository.GemmaModelStatus
 import com.example.localllmvoice.domain.model.ConversationTopic
 import com.example.localllmvoice.ui.components.AnimatedBrainIcon
 
@@ -82,18 +86,13 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 item(key = "status") {
-                    ModelStatusCard(
-                        modelStatus = uiState.modelStatus,
-                        message = uiState.modelStatusMessage,
-                        backend = uiState.activeBackend,
-                        capability = uiState.deviceCapability,
-                        isDownloading = uiState.isDownloading,
-                        downloadProgress = uiState.downloadProgressBytes,
-                        downloadTotal = uiState.downloadTotalBytes,
-                        canDownload = uiState.canDownload,
-                        onDownload = viewModel::downloadModel,
-                        onRefresh = viewModel::refreshModelStatus,
-                    )
+                    AnimatedVisibility(
+                        visible = uiState.modelStatus != null && uiState.isCardVisible,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        ModelStatusCard(uiState.modelStatus)
+                    }
                 }
 
                 uiState.errorMessage?.let { error ->
@@ -128,24 +127,49 @@ fun DashboardScreen(
 
 @Composable
 private fun ModelStatusCard(
-    modelStatus: GemmaModelStatus,
-    message: String,
-    backend: String?,
-    capability: DeviceCapability?,
-    isDownloading: Boolean,
-    downloadProgress: Long,
-    downloadTotal: Long,
-    canDownload: Boolean,
-    onDownload: () -> Unit,
-    onRefresh: () -> Unit,
+    modelStatus: DashboardUiState.UiModelState?,
 ) {
+    if (modelStatus == null) return
+
     OutlinedCard(
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (modelStatus == GemmaModelStatus.INITIALIZING) {
+        if (modelStatus == DashboardUiState.UiModelState.Ready) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(56.dp),
+                )
+                Text(
+                    text = "Tutor is ready!",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "Everything is set up and ready to go.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            return@OutlinedCard
+        }
+
+        if (modelStatus == DashboardUiState.UiModelState.Loading) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -156,74 +180,32 @@ private fun ModelStatusCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
             }
             return@OutlinedCard
         }
 
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "On-device Models",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            backend?.let {
-                Text(
-                    text = "Runtime: $it",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            capability?.let { info ->
-                Text(
-                    text = info.deviceSummary,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (modelStatus == DashboardUiState.UiModelState.Error) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(56.dp),
                 )
                 Text(
-                    text = "RAM ${info.totalRamBytes / 1_000_000_000} GB · Storage free ${info.freeStorageBytes / 1_000_000_000} GB",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                info.hints.forEach { hint ->
-                    Text(
-                        text = "• $hint",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (isDownloading && downloadTotal > 0) {
-                LinearProgressIndicator(
-                    progress = { downloadProgress.toFloat() / downloadTotal.toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else if (isDownloading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    text = "Something went wrong",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
                 )
             }
-            if (canDownload) {
-                Button(onClick = onDownload, enabled = !isDownloading) {
-                    Text("Download models")
-                }
-            }
-            Button(onClick = onRefresh, enabled = !isDownloading) {
-                Text("Refresh status")
-            }
+            return@OutlinedCard
         }
     }
 }
