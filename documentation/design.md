@@ -25,10 +25,10 @@ colors:
   on-secondary: '#ffffff'
   secondary-container: '#fed797'
   on-secondary-container: '#785c28'
-  tertiary: '#735948'
+  tertiary: '#526443'
   on-tertiary: '#ffffff'
-  tertiary-container: '#b89986'
-  on-tertiary-container: '#473223'
+  tertiary-container: '#92a57f'
+  on-tertiary-container: '#2b3b1e'
   error: '#ba1a1a'
   on-error: '#ffffff'
   error-container: '#ffdad6'
@@ -41,10 +41,10 @@ colors:
   secondary-fixed-dim: '#e6c183'
   on-secondary-fixed: '#271900'
   on-secondary-fixed-variant: '#5c4210'
-  tertiary-fixed: '#ffdcc6'
-  tertiary-fixed-dim: '#e1c0ab'
-  on-tertiary-fixed: '#29170a'
-  on-tertiary-fixed-variant: '#594232'
+  tertiary-fixed: '#d5e9bf'
+  tertiary-fixed-dim: '#b9cda5'
+  on-tertiary-fixed: '#111f06'
+  on-tertiary-fixed-variant: '#3b4c2d'
   background: '#fff8f6'
   on-background: '#211a19'
   surface-variant: '#eedfdd'
@@ -104,11 +104,11 @@ The style leans into a **refined organic minimalism**. It utilizes soft textures
 
 ## Colors
 
-The palette is inspired by Mediterranean and Latin American landscapes—earthy, sun-baked, and sophisticated.
+The palette is inspired by Mediterranean and Latin American landscapes—earthy, sun-baked, and revitalizing.
 
-- **Primary (Sun-Bleached Terracotta):** A lightened, more vibrant clay tone (#dc8a7a). Used for key structural elements, primary branding, and progress indicators. It conveys warmth, history, and a welcoming openness.
-- **Secondary (Soft Amber):** A lightened, creamy saffron tone (#f3cd8e). Reserved exclusively for the "Moment of Action"—the microphone button and active voice states. It represents energy, clarity, and the spark of communication.
-- **Neutral/Text (Warm Dark Brown):** Replaces harsh blacks to maintain a soft, ink-on-paper contrast level (#3a2618).
+- **Primary (Sun-Bleached Terracotta):** A vibrant clay tone (#dc8a7a). Used for key structural elements, primary branding, and progress indicators. It conveys warmth, history, and a welcoming openness.
+- **Secondary (Soft Amber):** A creamy saffron tone (#f3cd8e). Reserved exclusively for the "Moment of Action"—the microphone button and active voice states. It represents energy, clarity, and the spark of communication.
+- **Tertiary (Agave Sage):** A dusty, organic green (#96a983). Used for success states, secondary accents, and highlighting natural growth. It provides a cool, calming counterpoint to the warm terracotta.
 - **Background (Dusty Sand):** Provides a warm, non-reflective canvas that reduces eye strain and feels more like parchment than a screen.
 
 ## Typography
@@ -138,20 +138,3 @@ The shape language is defined by **High Circularity**. There are no sharp corner
 - **Standard Containers:** Use 1rem (rounded-lg) for content cards.
 - **Buttons & Inputs:** Use 1.5rem (rounded-xl) or full-pill shapes to make them feel "touchable" and soft.
 - **Icons:** Use "hand-adjacent" line icons with rounded caps and corners. Avoid perfectly straight geometric lines; a subtle "imperfect" curve is preferred to reinforce the artisanal feel.
-
-## Components
-
-### The Pulse (Voice UI)
-The central component. Instead of a linear bar, use a fluid, organic "blob" or waveform that expands and contracts. It should feel like a living thing, colored in the Soft Amber accent.
-
-### Primary Action Button
-Large, pill-shaped, and colored in Soft Amber. When inactive or "listening," the button can transform into the aforementioned organic waveform.
-
-### Phrase Cards
-Used for displaying Spanish/English pairs. They should have a subtle 1px stroke (Primary Terracotta at 10% opacity) and generous internal padding. The Spanish text is always the hero.
-
-### Audio Progress
-Avoid "techy" sliders. Use a soft, thick line with a rounded head. The "track" should be a darker shade of the background color, not grey.
-
-### Feedback Toasts
-Use soft, rounded banners at the top of the screen. Success states use a warm sage green (earthy, not neon), and errors use a muted brick red.
