@@ -1,11 +1,9 @@
 package com.example.localllmvoice
 
-import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
@@ -13,13 +11,9 @@ import com.example.localllmvoice.navigation.SoloTalkNavHost
 import com.example.localllmvoice.ui.theme.LocalLLMVoiceTheme
 
 class MainActivity : ComponentActivity() {
-    private val requestMicPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { /* Chat screen surfaces recorder errors if denied */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
         enableEdgeToEdge()
 
         val appContainer = (application as SoloTalkApplication).appContainer
