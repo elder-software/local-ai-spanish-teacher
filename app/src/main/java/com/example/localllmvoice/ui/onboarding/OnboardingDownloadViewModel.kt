@@ -64,7 +64,7 @@ class OnboardingDownloadViewModel(
                         _uiState.update {
                             it.copy(
                                 phase = OnboardingDownloadUiState.Phase.Failed,
-                                errorMessage = event.message,
+                                errorMessage = "Download failed",
                             )
                         }
                     }

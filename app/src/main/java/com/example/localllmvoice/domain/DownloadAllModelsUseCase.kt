@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.flow
 sealed interface DownloadAllModelsEvent {
     data class Progress(val progressPercent: Int, val currentDownload: CurrentDownload) : DownloadAllModelsEvent
     data object Completed : DownloadAllModelsEvent
-    data class Failed(val message: String) : DownloadAllModelsEvent
+    data object Failed : DownloadAllModelsEvent
 }
 
 enum class CurrentDownload {
@@ -43,8 +43,6 @@ class DownloadAllModelsUseCase(
             var currentBaseProgress = 0.0f
 
             if (gemmaNeedsDownload) {
-                var gemmaFailed = false
-                var failureMessage = ""
                 gemmaLlmRepository.downloadModel().collect { event ->
                     when (event) {
                         is ModelDownloadEvent.Progress -> {
@@ -54,8 +52,6 @@ class DownloadAllModelsUseCase(
                                 0.0f
                             }
                             val overallPercent = (currentBaseProgress + (gemmaPercent * gemmaWeight)) * 100
-                            val downloadedMb = event.downloadedBytes / 1_000_000
-                            val totalMb = event.totalBytes / 1_000_000
                             emit(
                                 DownloadAllModelsEvent.Progress(
                                     progressPercent = overallPercent.toInt().coerceIn(0, 100),
@@ -64,17 +60,13 @@ class DownloadAllModelsUseCase(
                             )
                         }
                         is ModelDownloadEvent.Failed -> {
-                            gemmaFailed = true
-                            failureMessage = event.message
+                            emit(DownloadAllModelsEvent.Failed)
+                            return@collect
                         }
                         ModelDownloadEvent.Completed -> {
                             // Proceed
                         }
                     }
-                }
-                if (gemmaFailed) {
-                    emit(DownloadAllModelsEvent.Failed("Gemma download failed: $failureMessage"))
-                    return@flow
                 }
                 currentBaseProgress += gemmaWeight
             }
@@ -91,7 +83,7 @@ class DownloadAllModelsUseCase(
                         )
                     }
                 } catch (e: Exception) {
-                    emit(DownloadAllModelsEvent.Failed("STT download failed: ${e.message}"))
+                    emit(DownloadAllModelsEvent.Failed)
                     return@flow
                 }
                 currentBaseProgress += sttWeight
@@ -99,7 +91,7 @@ class DownloadAllModelsUseCase(
 
             emit(DownloadAllModelsEvent.Completed)
         } catch (e: Exception) {
-            emit(DownloadAllModelsEvent.Failed("Download failed: ${e.message}"))
+            emit(DownloadAllModelsEvent.Failed)
         }
     }
 }

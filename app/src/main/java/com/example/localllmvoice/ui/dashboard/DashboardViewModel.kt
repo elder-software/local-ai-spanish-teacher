@@ -102,7 +102,7 @@ class DashboardViewModel(
                             it.copy(
                                 isDownloading = false,
                                 modelStatus = GemmaModelStatus.ERROR,
-                                errorMessage = event.message,
+                                errorMessage = "Download failed",
                                 modelStatusMessage = "Download failed",
                             )
                         }

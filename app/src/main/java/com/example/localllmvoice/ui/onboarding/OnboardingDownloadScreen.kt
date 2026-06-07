@@ -100,9 +100,9 @@ fun OnboardingDownloadScreen(
 
             uiState.errorMessage?.let { error ->
                 Text(
-                    text = "Download failed: $error",
+                    text = error,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
             }
