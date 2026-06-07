@@ -9,8 +9,10 @@ fun OnboardingWelcomeScreen(
     modifier: Modifier = Modifier,
 ) {
     OnboardingScaffold(
-        heading = "Welcome",
-        body = "Stub welcome body",
+        heading = "Welcome to Anytime Spanish",
+        body = "Your private, always-ready language companion. Practice " +
+            "speaking 100% offline. No subscriptions, no cloud servers, " +
+            "no judgment.",
         modifier = modifier,
     ) {
         OnboardingPrimaryButton(
