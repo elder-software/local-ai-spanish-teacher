@@ -18,3 +18,11 @@ data class ConversationTopic(
     val openingMessage: String,
     val systemPrompt: String,
 )
+
+data class TopicCategory(
+    val id: String,
+    val title: String,
+    val description: String,
+    val isFree: Boolean = false,
+    val topics: List<ConversationTopic>,
+)
