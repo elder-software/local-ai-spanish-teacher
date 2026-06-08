@@ -118,6 +118,6 @@ class RevenueCatRepository {
     }
 
     companion object {
-        const val ENTITLEMENT_ID = "full_library"
+        const val ENTITLEMENT_ID = "all_scenarios"
     }
 }

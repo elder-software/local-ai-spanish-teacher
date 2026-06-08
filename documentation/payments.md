@@ -15,7 +15,7 @@ flowchart LR
 ## How it works
 
 - **One-time purchase** ($29.99) unlocks all paid `TopicCategory` scenarios
-- **Entitlement**: `full_library` — checked via `RevenueCatRepository.isEntitled: StateFlow<Boolean>`
+- **Entitlement**: `all_scenarios` — checked via `RevenueCatRepository.isEntitled: StateFlow<Boolean>`
 - **Source of truth**: RevenueCat `CustomerInfo` (cached offline, no SharedPreferences needed)
 - **Pricing**: Live from RevenueCat offering with `$29.99` fallback
 
@@ -43,7 +43,7 @@ flowchart LR
 ## Setup Prerequisites
 
 1. RevenueCat project + Google Play Service Credentials
-2. Play Console: managed product `full_library_unlock`
-3. RevenueCat: entitlement `full_library` → product → offering
+2. Play Console: managed product `all_scenarios_unlock`
+3. RevenueCat: entitlement `all_scenarios` → product → offering
 4. Add public SDK key to `BuildConfig.REVENUECAT_API_KEY`
 5. Test with signed build + Play license tester

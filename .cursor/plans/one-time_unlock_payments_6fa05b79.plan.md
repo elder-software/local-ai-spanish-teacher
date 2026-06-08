@@ -30,8 +30,8 @@ flowchart LR
 
 Non-code prerequisites (cannot be done in code, must exist before testing purchases):
 - Create a RevenueCat project and add Google Play Service Credentials.
-- Create a managed one-time product `full_library_unlock` in Play Console.
-- In RevenueCat: create entitlement id `full_library`, attach the product, add it to the current Offering.
+- Create a managed one-time product `all_scenarios_unlock` in Play Console.
+- In RevenueCat: create entitlement id `all_scenarios`, attach the product, add it to the current Offering.
 - Copy the RevenueCat Android (Google) public SDK key into the app config (see PR 1).
 - Test with a signed build and a Play license tester.
 
@@ -77,7 +77,7 @@ Purchases.configure(
 
 **RevenueCatRepository changes (~150 lines):**
 - Constructor `RevenueCatRepository()` — uses the `Purchases.sharedInstance` singleton (configured in the Application). Owns an application-scoped `CoroutineScope(SupervisorJob() + Dispatchers.Main)` (RevenueCat callbacks are main-thread friendly).
-- Constants: `const val ENTITLEMENT_ID = "full_library"`; `const val FALLBACK_PRICE = "$29.99"`.
+- Constants: `const val ENTITLEMENT_ID = "all_scenarios"`; `const val FALLBACK_PRICE = "$29.99"`.
 - Public state:
   - `val isEntitled: StateFlow<Boolean>` (MutableStateFlow, default false)
   - `val formattedPrice: StateFlow<String?>` (null until offerings load; UI falls back to `FALLBACK_PRICE`)
