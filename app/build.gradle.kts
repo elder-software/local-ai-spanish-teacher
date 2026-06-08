@@ -28,6 +28,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "HUGGING_FACE_TOKEN", "\"$huggingFaceToken\"")
+        buildConfigField("String", "REVENUECAT_API_KEY", "\"goog_REPLACE_ME\"")
     }
 
     buildTypes {
@@ -72,6 +73,7 @@ dependencies {
     implementation(libs.vosk.android)
     implementation(libs.whisper.android)
     implementation(libs.moonshine.voice)
+    implementation(libs.revenuecat.purchases)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

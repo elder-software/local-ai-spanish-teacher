@@ -16,6 +16,7 @@ composeBom = "2024.09.00"
 vosk = "0.3.75"
 whisper = "1.0.0"
 moonshineVoice = "0.0.62"
+revenuecat = "10.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -43,6 +44,7 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
 whisper-android = { group = "mx.valdora", name = "whisper-android", version.ref = "whisper" }
 moonshine-voice = { group = "ai.moonshine", name = "moonshine-voice", version.ref = "moonshineVoice" }
+revenuecat-purchases = { group = "com.revenuecat.purchases", name = "purchases", version.ref = "revenuecat" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

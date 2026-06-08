@@ -5,6 +5,7 @@ import com.example.localllmvoice.data.audio.MoonshineSpeechToTextManager
 import com.example.localllmvoice.data.audio.SpeechToTextEngine
 import com.example.localllmvoice.data.audio.TextToSpeechManager
 import com.example.localllmvoice.data.onboarding.OnboardingPreferences
+import com.example.localllmvoice.data.purchase.RevenueCatRepository
 import com.example.localllmvoice.data.repository.GemmaLlmRepository
 import com.example.localllmvoice.domain.DecideStartupStateUseCase
 import com.example.localllmvoice.domain.DownloadAllModelsUseCase
@@ -31,8 +32,10 @@ class AppContainer(context: Context) {
         gemmaLlmRepository = gemmaLlmRepository,
         speechToTextEngine = speechToTextManager,
     )
+    val purchaseRepository = RevenueCatRepository()
 
     init {
         speechToTextManager.preload()
+        purchaseRepository.start()
     }
 }
