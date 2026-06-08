@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -91,6 +96,18 @@ private fun DashboardContent(
     onTopicSelected: (ConversationTopic) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Keep a stable non-null status while the card is exiting so the height animation
+    // has real content to shrink. The VM often nulls modelStatus at the same time it
+    // sets isCardVisible=false (e.g. the 3s auto-dismiss of the Ready banner).
+    var displayedModelStatus by remember { mutableStateOf(uiState.modelStatus) }
+    LaunchedEffect(uiState.modelStatus, uiState.isCardVisible) {
+        if (uiState.modelStatus != null && uiState.isCardVisible) {
+            displayedModelStatus = uiState.modelStatus
+        }
+        // When hiding we intentionally leave the last value so AnimatedVisibility's
+        // exit transition can still render a full card while the Box animates height.
+    }
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -100,19 +117,27 @@ private fun DashboardContent(
                 .fillMaxSize()
                 .safeDrawingPadding(),
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "header") {
                 DashboardHeader()
             }
 
             item(key = "status") {
-                AnimatedVisibility(
-                    visible = uiState.modelStatus != null && uiState.isCardVisible,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize(),
                 ) {
-                    ModelStatusCard(modelStatus = uiState.modelStatus)
+                    AnimatedVisibility(
+                        visible = uiState.modelStatus != null && uiState.isCardVisible,
+                        enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                        exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+                    ) {
+                        displayedModelStatus?.let { status ->
+                            ModelStatusCard(modelStatus = status)
+                        }
+                    }
                 }
             }
 
@@ -126,9 +151,9 @@ private fun DashboardContent(
                 TopicSectionHeader(canStartConversation = uiState.canStartConversation)
             }
 
-            uiState.categories.forEach { category ->
+            uiState.categories.forEachIndexed { index, category ->
                 item(key = "cat_${category.id}") {
-                    CategorySectionHeader(category = category)
+                    CategorySectionHeader(category)
                 }
                 items(category.topics, key = { "${category.id}_${it.id}" }) { topic ->
                     TopicCard(
@@ -151,7 +176,7 @@ private fun DashboardHeader(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            text = "SoloTalk",
+            text = "Anytime Spanish",
             style = MaterialTheme.typography.displaySmall,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -165,11 +190,9 @@ private fun DashboardHeader(
 
 @Composable
 private fun ModelStatusCard(
-    modelStatus: DashboardUiState.UiModelState?,
+    modelStatus: DashboardUiState.UiModelState,
     modifier: Modifier = Modifier,
 ) {
-    if (modelStatus == null) return
-
     val colorScheme = MaterialTheme.colorScheme
     val containerColor: androidx.compose.ui.graphics.Color
     val iconContainerColor: androidx.compose.ui.graphics.Color
@@ -295,37 +318,60 @@ private fun CategorySectionHeader(
     category: TopicCategory,
     modifier: Modifier = Modifier,
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        HorizontalDivider(
+            modifier = Modifier
+                .padding(vertical = 8.dp)
+                .fillMaxWidth(0.2f)
+                .align(Alignment.CenterHorizontally),
+            color = colorScheme.outlineVariant.copy(alpha = 0.72f),
+            thickness = 4.dp,
+        )
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                text = category.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            if (category.isFree) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                ) {
-                    Text(
-                        text = "Free",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = category.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = colorScheme.onBackground,
+                )
+                if (category.isFree) {
+                    FreeBadge()
                 }
             }
+            Text(
+                text = category.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colorScheme.onSurfaceVariant,
+            )
         }
+    }
+}
+
+@Composable
+private fun FreeBadge(
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = modifier,
+    ) {
         Text(
-            text = category.description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Free",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
         )
     }
 }
@@ -387,16 +433,16 @@ private fun TopicCard(
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
             ) {
                 Text(
                     text = topic.title,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     color = colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
@@ -407,10 +453,11 @@ private fun TopicCard(
                     } else {
                         colorScheme.surfaceVariant
                     },
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
+                            modifier = Modifier.size(16.dp),
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null,
                             tint = if (enabled) {
@@ -424,8 +471,9 @@ private fun TopicCard(
             }
 
             Text(
+                modifier = Modifier.padding(end = 60.dp),
                 text = topic.description,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = colorScheme.onSurfaceVariant,
             )
         }

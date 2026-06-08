@@ -85,21 +85,21 @@ val Typography = Typography(
     ),
     // titleLarge for standard large titles
     titleLarge = TextStyle(
-        fontFamily = LibreCaslonTextFontFamily,
+        fontFamily = DmSansFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 22.sp,
         lineHeight = 28.sp
     ),
     // titleMedium for cards/subheadings (used in Dashboard/Feedback)
     titleMedium = TextStyle(
-        fontFamily = LibreCaslonTextFontFamily,
+        fontFamily = DmSansFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
         lineHeight = 24.sp
     ),
     // titleSmall (used in Dashboard)
     titleSmall = TextStyle(
-        fontFamily = LibreCaslonTextFontFamily,
+        fontFamily = DmSansFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp
