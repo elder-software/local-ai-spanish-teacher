@@ -94,6 +94,12 @@ class RevenueCatRepository {
         }
     }
 
+    fun resetPurchaseState() {
+        if (_purchaseState.value is PurchaseState.Failed) {
+            _purchaseState.value = PurchaseState.Idle
+        }
+    }
+
     @OptIn(ExperimentalPreviewRevenueCatPurchasesAPI::class)
     suspend fun restore() {
         try {
