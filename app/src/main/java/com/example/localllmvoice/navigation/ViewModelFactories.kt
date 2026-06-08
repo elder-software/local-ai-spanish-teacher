@@ -8,6 +8,7 @@ import com.example.localllmvoice.ui.chat.ChatViewModel
 import com.example.localllmvoice.ui.dashboard.DashboardViewModel
 import com.example.localllmvoice.ui.feedback.FeedbackViewModel
 import com.example.localllmvoice.ui.onboarding.OnboardingDownloadViewModel
+import com.example.localllmvoice.ui.onboarding.PaywallViewModel
 
 class DashboardViewModelFactory(
     private val appContainer: AppContainer,
@@ -62,6 +63,18 @@ class OnboardingDownloadViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(OnboardingDownloadViewModel::class.java)) {
             return OnboardingDownloadViewModel(appContainer.downloadAllModelsUseCase) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+class PaywallViewModelFactory(
+    private val appContainer: AppContainer,
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(PaywallViewModel::class.java)) {
+            return PaywallViewModel(appContainer.purchaseRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -24,6 +24,11 @@ class DashboardViewModel(
 
     init {
         refreshModelStatus()
+        viewModelScope.launch {
+            appContainer.purchaseRepository.isEntitled.collect { entitled ->
+                _uiState.update { it.copy(isEntitled = entitled) }
+            }
+        }
     }
 
     fun refreshModelStatus() {

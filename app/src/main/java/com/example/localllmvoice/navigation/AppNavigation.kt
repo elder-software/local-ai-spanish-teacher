@@ -20,10 +20,11 @@ import com.example.localllmvoice.ui.dashboard.DashboardScreen
 import com.example.localllmvoice.ui.dashboard.DashboardViewModel
 import com.example.localllmvoice.ui.feedback.FeedbackScreen
 import com.example.localllmvoice.ui.feedback.FeedbackViewModel
-import com.example.localllmvoice.ui.onboarding.OnboardingWelcomeScreen
-import com.example.localllmvoice.ui.onboarding.OnboardingPaywallScreen
 import com.example.localllmvoice.ui.onboarding.OnboardingDownloadScreen
 import com.example.localllmvoice.ui.onboarding.OnboardingDownloadViewModel
+import com.example.localllmvoice.ui.onboarding.OnboardingPaywallScreen
+import com.example.localllmvoice.ui.onboarding.OnboardingWelcomeScreen
+import com.example.localllmvoice.ui.onboarding.PaywallViewModel
 
 object Routes {
     const val DASHBOARD = "dashboard"
@@ -35,6 +36,7 @@ object Routes {
     const val ONBOARDING_PAYWALL = "onboarding/paywall"
     const val ONBOARDING_DOWNLOAD = "onboarding/download"
     const val ONBOARDING_DOWNLOAD_RECOVERY = "onboarding/download_recovery"
+    const val PAYWALL = "paywall"
 
     fun chat(topicId: String) = "chat/$topicId"
 }
@@ -66,10 +68,18 @@ fun SoloTalkNavHost(
                 )
             }
             composable(Routes.ONBOARDING_PAYWALL) {
+                val viewModel: PaywallViewModel = viewModel(
+                    factory = PaywallViewModelFactory(appContainer),
+                )
                 OnboardingPaywallScreen(
-                    onContinue = {
+                    viewModel = viewModel,
+                    onPurchased = {
                         navController.navigate(Routes.ONBOARDING_DOWNLOAD)
-                    }
+                    },
+                    onContinueFree = {
+                        navController.navigate(Routes.ONBOARDING_DOWNLOAD)
+                    },
+                    onClose = {},
                 )
             }
             composable(Routes.ONBOARDING_DOWNLOAD) {
@@ -108,6 +118,18 @@ fun SoloTalkNavHost(
             }
         }
 
+        composable(Routes.PAYWALL) {
+            val viewModel: PaywallViewModel = viewModel(
+                factory = PaywallViewModelFactory(appContainer),
+            )
+            OnboardingPaywallScreen(
+                viewModel = viewModel,
+                onPurchased = { navController.popBackStack() },
+                onContinueFree = null,
+                onClose = { navController.popBackStack() },
+            )
+        }
+
         composable(Routes.DASHBOARD) {
             val viewModel: DashboardViewModel = viewModel(
                 factory = DashboardViewModelFactory(appContainer),
@@ -117,6 +139,7 @@ fun SoloTalkNavHost(
                 onTopicSelected = { topic ->
                     navController.navigate(Routes.chat(topic.id))
                 },
+                onUnlockRequested = { navController.navigate(Routes.PAYWALL) },
             )
         }
 

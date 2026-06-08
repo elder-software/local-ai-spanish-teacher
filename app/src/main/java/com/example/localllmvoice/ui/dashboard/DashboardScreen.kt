@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,6 +64,7 @@ import com.example.localllmvoice.ui.theme.LocalLLMVoiceTheme
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     onTopicSelected: (ConversationTopic) -> Unit,
+    onUnlockRequested: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -85,6 +87,7 @@ fun DashboardScreen(
     DashboardContent(
         uiState = uiState,
         onTopicSelected = onTopicSelected,
+        onUnlockRequested = onUnlockRequested,
         modifier = modifier,
     )
 }
@@ -94,6 +97,7 @@ fun DashboardScreen(
 private fun DashboardContent(
     uiState: DashboardUiState,
     onTopicSelected: (ConversationTopic) -> Unit,
+    onUnlockRequested: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Keep a stable non-null status while the card is exiting so the height animation
@@ -151,7 +155,8 @@ private fun DashboardContent(
                 TopicSectionHeader(canStartConversation = uiState.canStartConversation)
             }
 
-            uiState.categories.forEachIndexed { index, category ->
+            uiState.categories.forEach { category ->
+                val unlocked = uiState.isCategoryUnlocked(category)
                 item(key = "cat_${category.id}") {
                     CategorySectionHeader(category)
                 }
@@ -159,7 +164,12 @@ private fun DashboardContent(
                     TopicCard(
                         topic = topic,
                         enabled = uiState.canStartConversation,
-                        onClick = { onTopicSelected(topic) },
+                        locked = !unlocked,
+                        onClick = if (unlocked) {
+                            { onTopicSelected(topic) }
+                        } else {
+                            onUnlockRequested
+                        },
                     )
                 }
             }
@@ -407,14 +417,16 @@ private fun TopicSectionHeader(
 private fun TopicCard(
     topic: ConversationTopic,
     enabled: Boolean,
+    locked: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val isInteractive = locked || enabled
 
     Card(
         onClick = onClick,
-        enabled = enabled,
+        enabled = isInteractive,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
@@ -423,7 +435,7 @@ private fun TopicCard(
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = if (enabled) {
+            color = if (isInteractive) {
                 colorScheme.primary.copy(alpha = 0.14f)
             } else {
                 colorScheme.outlineVariant.copy(alpha = 0.65f)
@@ -448,7 +460,7 @@ private fun TopicCard(
                 )
                 Surface(
                     shape = CircleShape,
-                    color = if (enabled) {
+                    color = if (isInteractive) {
                         colorScheme.secondaryContainer
                     } else {
                         colorScheme.surfaceVariant
@@ -458,9 +470,13 @@ private fun TopicCard(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             modifier = Modifier.size(16.dp),
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            imageVector = if (locked) {
+                                Icons.Filled.Lock
+                            } else {
+                                Icons.AutoMirrored.Filled.ArrowForward
+                            },
                             contentDescription = null,
-                            tint = if (enabled) {
+                            tint = if (isInteractive) {
                                 colorScheme.onSecondaryContainer
                             } else {
                                 colorScheme.onSurfaceVariant
@@ -492,6 +508,7 @@ private fun DashboardContentReadyPreview() {
                 isCardVisible = false,
             ),
             onTopicSelected = {},
+            onUnlockRequested = {},
         )
     }
 }
@@ -508,6 +525,7 @@ private fun DashboardContentLoadingPreview() {
                 isCardVisible = true,
             ),
             onTopicSelected = {},
+            onUnlockRequested = {},
         )
     }
 }

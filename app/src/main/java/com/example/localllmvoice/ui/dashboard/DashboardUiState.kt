@@ -8,8 +8,11 @@ data class DashboardUiState(
     val modelStatus: UiModelState? = UiModelState.Loading,
     val errorMessage: String? = null,
     val isCardVisible: Boolean = true,
+    val isEntitled: Boolean = false,
 ) {
     val canStartConversation: Boolean = modelStatus == UiModelState.Ready || modelStatus == null
+
+    fun isCategoryUnlocked(category: TopicCategory): Boolean = category.isFree || isEntitled
 
     sealed interface UiModelState {
         object Loading : UiModelState
