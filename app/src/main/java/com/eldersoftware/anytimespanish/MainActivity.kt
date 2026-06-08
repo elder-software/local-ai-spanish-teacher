@@ -1,0 +1,29 @@
+package com.eldersoftware.anytimespanish
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import com.eldersoftware.anytimespanish.navigation.AnytimeSpanishNavHost
+import com.eldersoftware.anytimespanish.ui.theme.AnytimeSpanishTheme
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        val appContainer = (application as AnytimeSpanishApplication).appContainer
+
+        setContent {
+            AnytimeSpanishTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    AnytimeSpanishNavHost(appContainer = appContainer)
+                }
+            }
+        }
+    }
+}

@@ -1,4 +1,4 @@
-# Product Requirement Document (PRD): SoloTalk AI
+# Product Requirement Document (PRD): Anytime Spanish AI
 
 ## 1. System Context & Tech Stack
 

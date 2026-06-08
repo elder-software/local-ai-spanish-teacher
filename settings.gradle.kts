@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "localLLMVoice"
+rootProject.name = "AnytimeSpanish"
 include(":app")

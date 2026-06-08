@@ -14,13 +14,13 @@ if (localPropertiesFile.exists()) {
 val huggingFaceToken = localProperties.getProperty("huggingface.token", "").trim()
 
 android {
-    namespace = "com.example.localllmvoice"
+    namespace = "com.eldersoftware.anytimespanish"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.example.localllmvoice"
+        applicationId = "com.eldersoftware.anytimespanish"
         minSdk = 35
         targetSdk = 36
         versionCode = 1
@@ -28,7 +28,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "HUGGING_FACE_TOKEN", "\"$huggingFaceToken\"")
-        buildConfigField("String", "REVENUECAT_API_KEY", "\"goog_REPLACE_ME\"")
+        buildConfigField("String", "REVENUECAT_API_KEY", "\"goog_bWRtytdjGlYeneHpXZeDNhimZCT\"")
     }
 
     buildTypes {
