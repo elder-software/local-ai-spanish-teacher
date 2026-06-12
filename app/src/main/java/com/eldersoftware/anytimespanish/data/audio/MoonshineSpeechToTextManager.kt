@@ -104,13 +104,9 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
                 return merged
             }
 
-            fun emitFinalAndClose() {
+            fun emitFinalAndClose(finalText: String) {
                 if (finalized) return
                 finalized = true
-                val finalText = listOf(confirmedText, currentLineText)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ")
-                    .trim()
                 trySend(SttEvent.Final(finalText))
                 close()
             }
@@ -184,12 +180,18 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
             onStopRequested = {
                 Log.d(TAG, "Stop requested, finalizing transcription")
-                launch {
+                // Runs on IO: feedThread.join and every transcriber call below block on JNI
+                // decoding, and the second-pass decode of the full utterance is the heaviest
+                // call in this file.
+                launch(Dispatchers.IO) {
                     // Stop capture first so no further chunks are enqueued, then drain whatever is
                     // left, halt the feed thread, and only then flush the stream. Joining the feed
                     // thread before stop() guarantees addAudio() and stop() never touch the stream
-                    // concurrently.
-                    audioRecorder.stopAndGetRawPcm()
+                    // concurrently. The returned PCM is the complete utterance (silence-trimmed),
+                    // kept for the second decoding pass below.
+                    val fullUtterancePcm = audioRecorder
+                        .stopAndGetRawPcm(maxDurationMs = FULL_UTTERANCE_MAX_MS)
+                        .getOrNull()
                     feeding.set(false)
                     feedThread.interrupt()
                     feedThread.join(FEED_JOIN_TIMEOUT_MS)
@@ -207,16 +209,32 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
                     finalizing = true
                     // Flushes the active line, which triggers onLineCompleted.
                     transcriber.stop()
-                    if (!hadActiveLine) {
-                        // No line was in progress, so there is nothing left to settle.
-                        emitFinalAndClose()
-                    } else {
+                    if (hadActiveLine) {
                         // Wait for the completion event, but cap the wait so a missed callback
                         // can never hang the finalizer indefinitely.
                         withTimeoutOrNull(FINALIZE_TIMEOUT_MS) { lineCompletionSignal.await() }
                             ?: Log.w(TAG, "Timed out waiting for line completion; finalizing anyway")
-                        emitFinalAndClose()
                     }
+
+                    val streamingText = listOf(confirmedText, currentLineText)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" ")
+                        .trim()
+
+                    // Second pass: re-decode the whole utterance in one shot. Streaming decodes
+                    // line by line (segmented by the internal VAD), so the model never sees full
+                    // context; a single non-streaming decode over the complete audio is more
+                    // accurate. The streaming text remains as a fallback if this pass fails.
+                    val refinedText = fullUtterancePcm?.let { pcm ->
+                        try {
+                            transcribeFullUtterance(transcriber, pcm)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Full-utterance re-decode failed, using streaming text", e)
+                            null
+                        }
+                    }
+
+                    emitFinalAndClose(refinedText?.takeIf { it.isNotBlank() } ?: streamingText)
                 }
             }
 
@@ -248,6 +266,24 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
             trySend(SttEvent.Failure("Failed to start STT: ${e.message}"))
             close()
         }
+    }
+
+    /**
+     * Decodes the complete utterance in a single non-streaming pass and returns the joined
+     * transcript, or null when there is nothing to decode. [Transcriber.transcribeWithoutStreaming]
+     * is synchronous and does not touch the streaming state or notify listeners, so it is safe to
+     * call on the shared transcriber once the stream has been stopped and the feed thread joined.
+     */
+    private fun transcribeFullUtterance(transcriber: Transcriber, pcm: ByteArray): String? {
+        val audio = pcm16ToFloat(pcm)
+        if (audio.isEmpty()) return null
+        val transcript = transcriber.transcribeWithoutStreaming(audio, AudioRecorder.SAMPLE_RATE)
+            ?: return null
+        return transcript.lines
+            .mapNotNull { it.text?.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+            .ifBlank { null }
     }
 
     @Synchronized
@@ -392,6 +428,9 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
         private const val FEED_IDLE_SLEEP_MS = 20L
         // Upper bound on joining the feed thread during finalization.
         private const val FEED_JOIN_TIMEOUT_MS = 1_000L
+        // Cap on the audio kept for the second (full-utterance) decoding pass. Much higher than
+        // the trimmer's default 8s so long answers are not truncated before re-decoding.
+        private const val FULL_UTTERANCE_MAX_MS = 120_000
         private const val MODEL_BASE_URL = "https://download.moonshine.ai/model/base-es/quantized/base-es"
         private const val ENCODER_URL = "$MODEL_BASE_URL/encoder_model.ort"
         private const val DECODER_URL = "$MODEL_BASE_URL/decoder_model_merged.ort"

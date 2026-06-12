@@ -11,12 +11,14 @@ import com.eldersoftware.anytimespanish.domain.model.ConversationTopic
 import com.eldersoftware.anytimespanish.domain.model.FeedbackSession
 import com.eldersoftware.anytimespanish.domain.model.FeedbackSessionStore
 import com.eldersoftware.anytimespanish.domain.parser.GemmaStreamParser
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 class ChatViewModel(
     private val topic: ConversationTopic,
@@ -236,13 +238,18 @@ class ChatViewModel(
         }
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     override fun onCleared() {
         generationJob?.cancel()
         recognitionJob?.cancel()
         suggestionJob?.cancel()
         textToSpeechManager.stop()
         if (!handingOffToFeedback) {
-            runBlocking {
+            // viewModelScope is already cancelled here, and blocking with runBlocking froze
+            // navigation while the LLM session cancelled and closed. The reset must outlive
+            // this ViewModel, so fire-and-forget on GlobalScope; resetConversation is
+            // idempotent, so racing an earlier reset from endConversation() is harmless.
+            GlobalScope.launch(Dispatchers.Default) {
                 llmRepository.resetConversation()
             }
         }
@@ -311,7 +318,9 @@ class ChatViewModel(
 
     private fun updateInterim(text: String) {
         val current = _uiState.value as? ChatUiState.ActiveConversation ?: return
-        if (!current.isRecording) return
+        // Accepted during the transcribing phase too, so any late partials emitted while the
+        // recogniser finalizes still refresh the on-screen text.
+        if (!current.isRecording && !current.isTranscribing) return
         _uiState.value = current.copy(interimTranscript = text)
     }
 

@@ -2,6 +2,7 @@ package com.eldersoftware.anytimespanish.ui.chat
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -13,6 +14,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -49,9 +53,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eldersoftware.anytimespanish.ui.components.ChatMessageList
+import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.roundToInt
 
@@ -108,8 +114,18 @@ private fun ActiveChatContent(
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
+    val density = LocalDensity.current
     LaunchedEffect(state.messages.size) {
         scrollState.animateScrollTo(scrollState.maxValue)
+    }
+    // Follow the conversation as the streaming reply grows the content height, but only when
+    // the user is already near the bottom so reading back through history is never hijacked.
+    LaunchedEffect(scrollState.maxValue) {
+        val followThresholdPx = with(density) { 160.dp.toPx() }
+        val distanceFromBottom = scrollState.maxValue - scrollState.value
+        if (distanceFromBottom in 1..followThresholdPx.toInt()) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
     }
 
     Scaffold(
@@ -164,9 +180,11 @@ private fun ActiveChatContent(
                         )
                     }
 
-                    if (state.isGenerating) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(top = 16.dp),
+                    // Only shown while waiting for the first token (the LLM prefill pause); once
+                    // the assistant message starts streaming the bubble itself shows progress.
+                    if (state.isGenerating && state.messages.lastOrNull()?.isUser == true) {
+                        TypingIndicatorBubble(
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }
@@ -174,14 +192,18 @@ private fun ActiveChatContent(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
+                    // Stays visible through the transcribing phase so the words the user just
+                    // spoke remain on screen while the final transcript settles, instead of
+                    // vanishing into a blank pause.
                     AnimatedVisibility(
-                        visible = state.isRecording,
+                        visible = state.isRecording || state.isTranscribing,
                         enter = slideInHorizontally(tween(200)) { -it / 6 } + fadeIn(tween(200)),
                         exit = slideOutHorizontally(tween(160)) { -it / 6 } + fadeOut(tween(160)),
                     ) {
                         MicDebugPanel(
                             inputLevel = state.inputLevel,
                             heardText = state.interimTranscript,
+                            isFinalizing = state.isTranscribing,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                     }
@@ -219,6 +241,7 @@ private fun ActiveChatContent(
 private fun MicDebugPanel(
     inputLevel: Float,
     heardText: String?,
+    isFinalizing: Boolean,
     modifier: Modifier = Modifier,
 ) {
     // Speech sits low on a linear scale, so map RMS onto a dBFS range for a readable meter.
@@ -244,26 +267,37 @@ private fun MicDebugPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Mic input",
+                    text = if (isFinalizing) "Transcribing" else "Mic input",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    text = if (inputLevel > 0f) "${dbfs.roundToInt()} dB" else "-∞ dB",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                if (!isFinalizing) {
+                    Text(
+                        text = if (inputLevel > 0f) "${dbfs.roundToInt()} dB" else "-∞ dB",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (isFinalizing) {
+                // The mic is stopped, so a level meter would just freeze; show activity instead.
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
+                )
+            } else {
+                LinearProgressIndicator(
+                    progress = { animatedLevel },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
                 )
             }
 
-            LinearProgressIndicator(
-                progress = { animatedLevel },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-            )
-
             Text(
-                text = heard ?: "Listening…",
+                text = heard ?: if (isFinalizing) "Finishing up…" else "Listening…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (heard != null) {
                     MaterialTheme.colorScheme.onSurface
@@ -272,6 +306,55 @@ private fun MicDebugPanel(
                 },
                 modifier = Modifier.padding(top = 8.dp),
             )
+        }
+    }
+}
+
+/**
+ * Chat-style "partner is typing" placeholder shown during the LLM prefill pause, before the
+ * first token arrives. Styled to match the assistant [ChatBubble] so the eventual message
+ * appears to replace it in place.
+ */
+@Composable
+private fun TypingIndicatorBubble(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "typing_indicator")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_000, easing = LinearEasing),
+        ),
+        label = "typing_phase",
+    )
+
+    Surface(
+        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
+        shape = MaterialTheme.shapes.large,
+        modifier = modifier.padding(vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            repeat(3) { index ->
+                // A pulse travels across the dots: each dot brightens as the phase passes it.
+                val offset = (phase - index + 3f) % 3f
+                val alpha = if (offset < 1f) {
+                    0.35f + 0.55f * (1f - abs(offset * 2f - 1f))
+                } else {
+                    0.35f
+                }
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.secondary.copy(alpha = alpha),
+                            shape = CircleShape,
+                        ),
+                )
+            }
         }
     }
 }

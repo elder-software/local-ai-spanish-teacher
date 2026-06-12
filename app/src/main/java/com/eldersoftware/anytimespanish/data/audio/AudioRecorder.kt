@@ -13,6 +13,7 @@ import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
+import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,6 +31,13 @@ class AudioRecorder(private val context: Context) {
     private var recordingJob: Job? = null
     private val pcmBuffer = ByteArrayOutputStream()
     private val audioEffects = mutableListOf<AudioEffect>()
+
+    // True while the hardware AutomaticGainControl effect is attached to the active session.
+    // When the HAL is already managing input level, applying our own fixed boost on top risks
+    // pushing loud speech into the limiter, and clipping distortion is far worse for ASR than
+    // a quiet signal.
+    @Volatile
+    private var hardwareAgcActive = false
 
     val isRecording: Boolean
         get() = audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING
@@ -94,14 +102,16 @@ class AudioRecorder(private val context: Context) {
         Result.success(wav)
     }
 
-    suspend fun stopAndGetRawPcm(): Result<ByteArray> = withContext(Dispatchers.IO) {
+    suspend fun stopAndGetRawPcm(
+        maxDurationMs: Int = Pcm16AudioTrimmer.DEFAULT_MAX_DURATION_MS,
+    ): Result<ByteArray> = withContext(Dispatchers.IO) {
         val wasRecording = recorderMutex.withLock { audioRecord != null }
         if (!wasRecording) {
             return@withContext Result.failure(IllegalStateException("Not recording"))
         }
         stopActiveRecording(clearBuffer = false)
         val pcm = synchronized(pcmBuffer) {
-            val trimmedPcm = Pcm16AudioTrimmer.trim(pcmBuffer.toByteArray())
+            val trimmedPcm = Pcm16AudioTrimmer.trim(pcmBuffer.toByteArray(), maxDurationMs)
             pcmBuffer.reset()
             trimmedPcm
         }
@@ -145,7 +155,7 @@ class AudioRecorder(private val context: Context) {
     /**
      * Attaches built-in DSP effects to the capture session when the hardware/OS supports them.
      * These run in the audio HAL (cheap) and meaningfully improve SNR for far-field/noisy input,
-     * which directly improves Vosk recognition accuracy.
+     * which directly improves speech recognition accuracy.
      */
     private fun enableAudioEffects(sessionId: Int) {
         if (sessionId == AudioRecord.ERROR || sessionId == AudioRecord.ERROR_BAD_VALUE) return
@@ -164,6 +174,7 @@ class AudioRecorder(private val context: Context) {
                 AutomaticGainControl.create(sessionId)?.let {
                     it.enabled = true
                     audioEffects += it
+                    hardwareAgcActive = true
                 }
             }
         }.onFailure { Log.w(TAG, "AutomaticGainControl unavailable", it) }
@@ -186,6 +197,7 @@ class AudioRecorder(private val context: Context) {
             }
         }
         audioEffects.clear()
+        hardwareAgcActive = false
     }
 
     private fun captureAudio(
@@ -193,10 +205,11 @@ class AudioRecorder(private val context: Context) {
         onPcmChunk: ((ByteArray) -> Unit)?,
     ) {
         val buffer = ByteArray(4_096)
+        val gain = if (hardwareAgcActive) 1f else INPUT_GAIN
         while (recorderScope.isActive && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
             val read = record.read(buffer, 0, buffer.size)
             if (read > 0) {
-                applyGain(buffer, read, INPUT_GAIN)
+                applyGain(buffer, read, gain)
                 val chunk = buffer.copyOf(read)
                 synchronized(pcmBuffer) {
                     pcmBuffer.write(chunk)
@@ -215,18 +228,36 @@ class AudioRecorder(private val context: Context) {
     }
 
     /**
-     * Applies linear gain to PCM16 little-endian samples in-place, hard-limiting to the valid
-     * 16-bit range so amplification never wraps around into noise. Used to lift quiet mic input
-     * (the on-device AGC is unreliable) closer to the level Vosk expects.
+     * Applies linear gain to PCM16 little-endian samples in-place. The requested gain is reduced
+     * per chunk so the loudest sample never exceeds the 16-bit range: hard-clipping distortion
+     * degrades ASR accuracy far more than a slightly quieter signal. Only used when no hardware
+     * AGC is attached (see [hardwareAgcActive]); it lifts quiet mic input toward the level speech
+     * models expect.
      */
     private fun applyGain(buffer: ByteArray, length: Int, gain: Float) {
-        if (gain == 1f) return
+        if (gain <= 1f) return
+
+        var peak = 0
         var index = 0
         while (index + 1 < length) {
             val low = buffer[index].toInt() and 0xFF
             val high = buffer[index + 1].toInt()
             val sample = (low or (high shl 8)).toShort().toInt()
-            val amplified = (sample * gain).toInt().coerceIn(MIN_PCM16, MAX_PCM16)
+            val magnitude = abs(sample)
+            if (magnitude > peak) peak = magnitude
+            index += 2
+        }
+        if (peak == 0) return
+
+        val safeGain = minOf(gain, MAX_PCM16.toFloat() / peak)
+        if (safeGain <= 1f) return
+
+        index = 0
+        while (index + 1 < length) {
+            val low = buffer[index].toInt() and 0xFF
+            val high = buffer[index + 1].toInt()
+            val sample = (low or (high shl 8)).toShort().toInt()
+            val amplified = (sample * safeGain).toInt().coerceIn(MIN_PCM16, MAX_PCM16)
             buffer[index] = (amplified and 0xFF).toByte()
             buffer[index + 1] = ((amplified shr 8) and 0xFF).toByte()
             index += 2
@@ -237,8 +268,9 @@ class AudioRecorder(private val context: Context) {
         const val SAMPLE_RATE = 16_000
         private const val TAG = "AudioRecorder"
 
-        // ~12 dB boost. The measured input sits around -35..-40 dBFS, well below Vosk's
-        // preferred level; this lifts it toward ~-25 dBFS while leaving peak headroom.
+        // ~12 dB boost applied only when no hardware AGC is available. The measured input sits
+        // around -35..-40 dBFS on devices without AGC; this lifts it toward ~-25 dBFS, and
+        // applyGain caps the boost per chunk so peaks never clip.
         private const val INPUT_GAIN = 4f
         private const val MIN_PCM16 = -32_768
         private const val MAX_PCM16 = 32_767
