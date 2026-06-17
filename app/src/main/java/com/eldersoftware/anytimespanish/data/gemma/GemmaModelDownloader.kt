@@ -27,9 +27,6 @@ class GemmaModelDownloader(
         var existing = if (temp.isFile) temp.length() else 0L
 
         val requestBuilder = Request.Builder().url(GemmaModelConfig.MODEL_URL)
-        if (com.eldersoftware.anytimespanish.BuildConfig.HUGGING_FACE_TOKEN.isNotEmpty()) {
-            requestBuilder.addHeader("Authorization", "Bearer ${com.eldersoftware.anytimespanish.BuildConfig.HUGGING_FACE_TOKEN}")
-        }
         if (existing > 0) {
             requestBuilder.addHeader("Range", "bytes=$existing-")
         }

@@ -64,7 +64,7 @@ class RevenueCatRepository {
     }
 
     private fun updateEntitlement(info: CustomerInfo) {
-        _isEntitled.value = info.entitlements[ENTITLEMENT_ID]?.isActive == true
+        _isEntitled.value = info.entitlements.all[ENTITLEMENT_ID]?.isActive == true
     }
 
     @OptIn(ExperimentalPreviewRevenueCatPurchasesAPI::class)
@@ -118,6 +118,6 @@ class RevenueCatRepository {
     }
 
     companion object {
-        const val ENTITLEMENT_ID = "all_scenarios"
+        const val ENTITLEMENT_ID = "Anytime Spanish All Scenarios"
     }
 }
