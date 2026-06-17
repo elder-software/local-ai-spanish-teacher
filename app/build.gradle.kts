@@ -11,7 +11,6 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
-val huggingFaceToken = localProperties.getProperty("huggingface.token", "").trim()
 
 android {
     namespace = "com.eldersoftware.anytimespanish"
