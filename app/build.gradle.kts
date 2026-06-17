@@ -26,7 +26,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "HUGGING_FACE_TOKEN", "\"$huggingFaceToken\"")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"goog_bWRtytdjGlYeneHpXZeDNhimZCT\"")
     }
 
