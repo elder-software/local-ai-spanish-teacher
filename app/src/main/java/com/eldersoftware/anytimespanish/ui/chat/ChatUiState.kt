@@ -17,5 +17,7 @@ sealed interface ChatUiState {
         val suggestedReply: String? = null,
         val isSuggestionVisible: Boolean = false,
         val isGeneratingSuggestion: Boolean = false,
+        val showMicrophonePermissionDialog: Boolean = false,
+        val microphonePermissionNeedsSettings: Boolean = false,
     ) : ChatUiState
 }

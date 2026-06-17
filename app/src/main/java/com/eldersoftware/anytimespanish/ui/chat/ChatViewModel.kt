@@ -200,6 +200,31 @@ class ChatViewModel(
         }
     }
 
+    fun dismissMicrophonePermissionDialog() {
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        _uiState.value = state.copy(
+            showMicrophonePermissionDialog = false,
+            microphonePermissionNeedsSettings = false,
+        )
+    }
+
+    fun onMicrophonePermissionGranted() {
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        _uiState.value = state.copy(
+            showMicrophonePermissionDialog = false,
+            microphonePermissionNeedsSettings = false,
+        )
+        startListening(_uiState.value as ChatUiState.ActiveConversation)
+    }
+
+    fun onMicrophonePermissionDenied(needsSettings: Boolean) {
+        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
+        _uiState.value = state.copy(
+            showMicrophonePermissionDialog = true,
+            microphonePermissionNeedsSettings = needsSettings,
+        )
+    }
+
     fun translateMessage(messageId: String) {
         val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
         val message = state.messages.find { it.id == messageId } ?: return
@@ -259,7 +284,11 @@ class ChatViewModel(
     private fun startListening(state: ChatUiState.ActiveConversation) {
         if (recognitionJob?.isActive == true) return
         if (!speechToTextManager.hasRecordPermission()) {
-            _uiState.value = state.copy(errorMessage = "Microphone permission not granted")
+            _uiState.value = state.copy(
+                showMicrophonePermissionDialog = true,
+                microphonePermissionNeedsSettings = false,
+                errorMessage = null,
+            )
             return
         }
         if (!speechToTextManager.isAvailable()) {
