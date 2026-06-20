@@ -2,7 +2,9 @@ package com.eldersoftware.anytimespanish.ui.chat
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -58,9 +60,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eldersoftware.anytimespanish.ui.components.ChatMessageList
 import kotlin.math.abs
@@ -76,6 +77,40 @@ import kotlin.math.roundToInt
 
 // Bottom of the meter's dynamic range in dBFS; 0 dB is full-scale PCM16.
 private const val METER_FLOOR_DB = -60f
+
+private const val MIC_PERMISSION_PREFS = "permissions"
+private const val KEY_REQUESTED_RECORD_AUDIO = "requested_record_audio"
+
+private fun hasRequestedRecordAudio(context: Context): Boolean =
+    context.getSharedPreferences(MIC_PERMISSION_PREFS, Context.MODE_PRIVATE)
+        .getBoolean(KEY_REQUESTED_RECORD_AUDIO, false)
+
+private fun markRecordAudioRequested(context: Context) {
+    context.getSharedPreferences(MIC_PERMISSION_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(KEY_REQUESTED_RECORD_AUDIO, true)
+        .apply()
+}
+
+/**
+ * True when the system will not show the permission sheet again and the user must use Settings.
+ * [shouldShowRequestPermissionRationale] alone cannot distinguish "never asked" from "don't ask
+ * again" (both return false); we need a persisted flag from a prior request attempt.
+ */
+private fun shouldOpenMicSettings(context: Context): Boolean {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+        PackageManager.PERMISSION_GRANTED
+    ) {
+        return false
+    }
+    val activity = context as? Activity
+    if (activity != null &&
+        ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.RECORD_AUDIO)
+    ) {
+        return false
+    }
+    return hasRequestedRecordAudio(context)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,23 +122,25 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var hasLaunchedPermissionRequest by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
+        markRecordAudioRequested(context)
         if (granted) {
             viewModel.onMicrophonePermissionGranted()
         } else {
-            val activity = context as? Activity
-            val needsSettings = hasLaunchedPermissionRequest && (
-                activity == null ||
-                    !ActivityCompat.shouldShowRequestPermissionRationale(
-                        activity,
-                        Manifest.permission.RECORD_AUDIO,
-                    )
-                )
-            viewModel.onMicrophonePermissionDenied(needsSettings)
+            viewModel.onMicrophonePermissionDenied(shouldOpenMicSettings(context))
+        }
+    }
+
+    val openAppSettings = remember(context) {
+        {
+            val intent = Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", context.packageName, null),
+            )
+            context.startActivity(intent)
         }
     }
 
@@ -119,20 +156,19 @@ fun ChatScreen(
 
         is ChatUiState.ActiveConversation -> {
             if (state.showMicrophonePermissionDialog) {
+                val needsSettings =
+                    state.microphonePermissionNeedsSettings || shouldOpenMicSettings(context)
                 MicrophonePermissionDialog(
-                    needsSettings = state.microphonePermissionNeedsSettings,
+                    needsSettings = needsSettings,
                     onDismiss = viewModel::dismissMicrophonePermissionDialog,
                     onAllowMicrophone = {
-                        hasLaunchedPermissionRequest = true
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        if (shouldOpenMicSettings(context)) {
+                            openAppSettings()
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
                     },
-                    onOpenSettings = {
-                        val intent = Intent(
-                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                            Uri.fromParts("package", context.packageName, null),
-                        )
-                        context.startActivity(intent)
-                    },
+                    onOpenSettings = openAppSettings,
                 )
             }
 
@@ -162,10 +198,7 @@ private fun MicrophonePermissionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Microphone access required") },
         text = {
-            Text(
-                "Anytime Spanish listens to your spoken Spanish. " +
-                    "Without microphone permission, you can't practice conversations in this app.",
-            )
+            Text("To practise conversation, the app needs to permission hear you speak.")
         },
         confirmButton = {
             TextButton(
