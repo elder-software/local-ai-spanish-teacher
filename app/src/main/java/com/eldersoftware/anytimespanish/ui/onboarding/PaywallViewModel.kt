@@ -16,6 +16,7 @@ data class PaywallUiState(
     val priceText: String? = null,
     val isPurchasing: Boolean = false,
     val isEntitled: Boolean = false,
+    val purchaseCompleted: Boolean = false,
     val errorMessage: String? = null,
 )
 
@@ -37,6 +38,7 @@ class PaywallViewModel(
                     priceText = formattedPrice,
                     isPurchasing = purchaseState is PurchaseState.Pending,
                     isEntitled = isEntitled,
+                    purchaseCompleted = purchaseState is PurchaseState.Success,
                     errorMessage = (purchaseState as? PurchaseState.Failed)?.message?.let(::mapPurchaseError),
                 )
             }.collect { state ->

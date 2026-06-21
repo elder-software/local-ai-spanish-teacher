@@ -12,6 +12,7 @@ import com.revenuecat.purchases.awaitCustomerInfo
 import com.revenuecat.purchases.awaitOfferings
 import com.revenuecat.purchases.awaitPurchase
 import com.revenuecat.purchases.awaitRestore
+import com.revenuecat.purchases.awaitSyncPurchases
 import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +83,22 @@ class RevenueCatRepository {
                 PurchaseParams.Builder(activity, pkg).build()
             )
             updateEntitlement(result.customerInfo)
+            // Promo codes / sandbox purchases can return a CustomerInfo whose
+            // entitlement hasn't propagated yet. Sync with the Play Store and
+            // re-fetch so we observe the freshly-granted entitlement.
+            if (!_isEntitled.value) {
+                try {
+                    val synced = Purchases.sharedInstance.awaitSyncPurchases()
+                    updateEntitlement(synced)
+                } catch (_: PurchasesException) {
+                    // Best-effort; the UpdatedCustomerInfoListener may still fire.
+                    try {
+                        updateEntitlement(Purchases.sharedInstance.awaitCustomerInfo())
+                    } catch (_: PurchasesException) {
+                        // Listeners will still update entitlement when ready.
+                    }
+                }
+            }
             _purchaseState.value = PurchaseState.Success
         } catch (e: PurchasesTransactionException) {
             _purchaseState.value = if (e.userCancelled) {

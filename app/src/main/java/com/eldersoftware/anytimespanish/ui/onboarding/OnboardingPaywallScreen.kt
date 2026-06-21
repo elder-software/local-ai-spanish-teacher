@@ -49,8 +49,8 @@ fun OnboardingPaywallScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
 
-    LaunchedEffect(uiState.isEntitled) {
-        if (uiState.isEntitled) onPurchased()
+    LaunchedEffect(uiState.isEntitled, uiState.purchaseCompleted) {
+        if (uiState.isEntitled || uiState.purchaseCompleted) onPurchased()
     }
 
     val body = "There's two real-world travel " +
