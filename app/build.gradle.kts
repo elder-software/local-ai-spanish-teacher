@@ -49,6 +49,15 @@ android {
         compose = true
         buildConfig = true
     }
+    packaging {
+        // sherpa-onnx and moonshine-voice each bundle their own libonnxruntime.so. Only one STT
+        // engine is active at a time, so a deterministic first-match pick is safe and avoids the
+        // duplicate-native-lib merge failure. If both engines are ever needed simultaneously,
+        // switch to the static-onnxruntime sherpa AAR and drop moonshine instead.
+        jniLibs {
+            pickFirsts += "**/libonnxruntime.so"
+        }
+    }
 }
 
 dependencies {

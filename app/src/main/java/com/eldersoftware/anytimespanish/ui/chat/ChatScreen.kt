@@ -74,6 +74,7 @@ import com.eldersoftware.anytimespanish.ui.components.ChatMessageList
 import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.roundToInt
+import androidx.core.content.edit
 
 // Bottom of the meter's dynamic range in dBFS; 0 dB is full-scale PCM16.
 private const val METER_FLOOR_DB = -60f
@@ -87,9 +88,9 @@ private fun hasRequestedRecordAudio(context: Context): Boolean =
 
 private fun markRecordAudioRequested(context: Context) {
     context.getSharedPreferences(MIC_PERMISSION_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putBoolean(KEY_REQUESTED_RECORD_AUDIO, true)
-        .apply()
+        .edit {
+            putBoolean(KEY_REQUESTED_RECORD_AUDIO, true)
+        }
 }
 
 /**
@@ -198,7 +199,7 @@ private fun MicrophonePermissionDialog(
         onDismissRequest = onDismiss,
         title = { Text("Microphone access required") },
         text = {
-            Text("To practise conversation, the app needs to permission hear you speak.")
+            Text("To practise conversation, the app needs permission to hear you speak.")
         },
         confirmButton = {
             TextButton(

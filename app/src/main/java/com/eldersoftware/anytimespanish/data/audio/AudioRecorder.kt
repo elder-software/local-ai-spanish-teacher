@@ -118,6 +118,20 @@ class AudioRecorder(private val context: Context) {
         Result.success(pcm)
     }
 
+    /**
+     * Stops capture and discards the buffered PCM without trimming or copying it. Use when the
+     * caller does not need the recorded audio (e.g. streaming ASR that already consumed the
+     * audio incrementally) to avoid an O(n) silence-trim scan over the full utterance.
+     */
+    suspend fun stopAndDiscard(): Result<Unit> = withContext(Dispatchers.IO) {
+        val wasRecording = recorderMutex.withLock { audioRecord != null }
+        if (!wasRecording) {
+            return@withContext Result.failure(IllegalStateException("Not recording"))
+        }
+        stopActiveRecording(clearBuffer = true)
+        Result.success(Unit)
+    }
+
     fun cancel() {
         recorderScope.launch {
             stopActiveRecording(clearBuffer = true)

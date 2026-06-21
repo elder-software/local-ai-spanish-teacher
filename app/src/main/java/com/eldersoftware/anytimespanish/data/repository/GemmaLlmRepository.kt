@@ -206,7 +206,7 @@ class GemmaLlmRepository(
                 }
                 previousText = text
             }
-        } catch (e: StopGenerationException) {
+        } catch (_: StopGenerationException) {
             // Expected behavior. The model finished its turn and we successfully intercepted it.
             Log.d(TAG, "Generation finished cleanly via stop token.")
         } catch (e: CancellationException) {
@@ -231,7 +231,7 @@ class GemmaLlmRepository(
             )
 
             try {
-                var previousText = ""
+                val previousText = ""
                 val parser = GemmaStreamParser()
 
                 conversation.sendMessageAsync(userContents).collect { message ->
@@ -241,7 +241,6 @@ class GemmaLlmRepository(
                     } else {
                         text
                     }
-                    previousText = text
                     val visibleText = StringBuilder()
                     parser.processToken(delta) { visible ->
                         if (visible.isNotEmpty()) {
@@ -298,7 +297,7 @@ class GemmaLlmRepository(
 
         try {
             val parser = GemmaStreamParser()
-            var previousText = ""
+            val previousText = ""
             val suggestion = StringBuilder()
 
             conversation.sendMessageAsync(Contents.of(Content.Text(userPayload))).collect { message ->
@@ -308,7 +307,6 @@ class GemmaLlmRepository(
                 } else {
                     text
                 }
-                previousText = text
                 parser.processToken(delta) { visible ->
                     if (visible.isNotEmpty()) {
                         suggestion.append(visible)
@@ -341,7 +339,7 @@ class GemmaLlmRepository(
 
             try {
                 val parser = GemmaStreamParser()
-                var previousText = ""
+                val previousText = ""
                 val punctuated = StringBuilder()
 
                 conversation.sendMessageAsync(Contents.of(Content.Text(rawTranscript))).collect { message ->
@@ -351,7 +349,6 @@ class GemmaLlmRepository(
                     } else {
                         text
                     }
-                    previousText = text
                     parser.processToken(delta) { visible ->
                         if (visible.isNotEmpty()) {
                             punctuated.append(visible)
@@ -360,6 +357,75 @@ class GemmaLlmRepository(
                 }
 
                 punctuated.toString().trim().ifEmpty { rawTranscript }
+            } finally {
+                closeActiveConversation()
+            }
+        }
+    }
+
+    override suspend fun correctTranscript(
+        transcript: String,
+        topicTitle: String,
+        conversationContext: String,
+    ): String {
+        val rawTranscript = transcript.trim()
+        if (rawTranscript.isEmpty()) return rawTranscript
+
+        return conversationMutex.withLock {
+            val modelPath = modelStore.resolveEngineModelPath().getOrThrow()
+            engineManager.initialize(modelPath)
+            // Deterministic decoding: we want the single most-likely correction, not creative
+            // rewrites. The same greedy config as punctuation/translation.
+            val correctSampler = SamplerConfig(
+                topK = 1,
+                topP = 0.1,
+                temperature = 0.0,
+            )
+            val conversation = replaceActiveConversation(
+                systemPrompt = TRANSCRIPT_CORRECTION_SYSTEM_PROMPT,
+                samplerConfig = correctSampler,
+            )
+
+            val userPayload = buildString {
+                appendLine("Tema de práctica: ${topicTitle.trim().ifEmpty { "(No especificado)" }}")
+                appendLine()
+                appendLine(
+                    "En la conversación reciente, \"Partner\" es el personaje simulado y " +
+                        "\"Learner\" es el estudiante humano que habla en español.",
+                )
+                val context = conversationContext.trim()
+                if (context.isNotEmpty()) {
+                    appendLine()
+                    appendLine("Conversación reciente:")
+                    append(context)
+                }
+                appendLine()
+                appendLine()
+                appendLine("Transcripción automática a corregir:")
+                append(rawTranscript)
+            }
+
+            try {
+                val parser = GemmaStreamParser()
+                val previousText = ""
+                val corrected = StringBuilder()
+
+                conversation.sendMessageAsync(Contents.of(Content.Text(userPayload)))
+                    .collect { message ->
+                        val text = stripLeadingAssistantLabel(message.textContent())
+                        val delta = if (text.startsWith(previousText)) {
+                            text.removePrefix(previousText)
+                        } else {
+                            text
+                        }
+                        parser.processToken(delta) { visible ->
+                            if (visible.isNotEmpty()) {
+                                corrected.append(visible)
+                            }
+                        }
+                    }
+
+                corrected.toString().trim().ifEmpty { rawTranscript }
             } finally {
                 closeActiveConversation()
             }
@@ -394,7 +460,7 @@ class GemmaLlmRepository(
 
             try {
                 val parser = GemmaStreamParser()
-                var previousText = ""
+                val previousText = ""
                 val translated = StringBuilder()
 
                 conversation.sendMessageAsync(Contents.of(Content.Text(rawText))).collect { message ->
@@ -404,7 +470,6 @@ class GemmaLlmRepository(
                     } else {
                         text
                     }
-                    previousText = text
                     parser.processToken(delta) { visible ->
                         if (visible.isNotEmpty()) {
                             translated.append(visible)
@@ -587,6 +652,26 @@ class GemmaLlmRepository(
             3. Prohibido reescribir: No mejores el estilo ni reescribas frases. Las palabras de salida deben ser idénticas a las de entrada; lo único que puede cambiar son las mayúsculas y los signos de puntuación.
             4. Uso de preguntas (¿?): Sé muy conservador con los signos de interrogación. Solo utilízalos si la frase contiene palabras interrogativas explícitas (como qué, cómo, cuándo, dónde, quién, por qué, cuál) o si la estructura es indudablemente una pregunta. En caso de duda, usa un punto final (.) en lugar de signos de interrogación.
             5. Formato de salida: Devuelve exclusivamente el texto con puntuación, sin explicaciones ni comentarios.
+        """.trimIndent()
+        private val TRANSCRIPT_CORRECTION_SYSTEM_PROMPT = """
+            Eres un corrector de transcripciones de reconocimiento de voz en español (es-ES). Recibes la transcripción automática de lo que dijo un estudiante humano de español ("Learner"). Tu única tarea es corregir errores obvios del reconocimiento de voz y añadir puntuación.
+
+            DISTINCIÓN CRÍTICA (lo más importante de esta tarea):
+            - El estudiante comete errores gramaticales y de vocabulario intencionados al aprender español. ESOS errores NO se tocan: forman parte de su producción y deben conservarse para evaluarlos.
+            - Solo debes corregir errores OBVIOS del reconocimiento de voz automático: palabras que NO existen en español y cuya corrección es evidente por similitud fonética. Por ejemplo: "quidando" → "quedando", "paber" → "caber", "bino" → "vino", "estarrr" → "estar".
+            - Regla decisiva: si la palabra existe en español (aunque esté mal usada gramaticalmente por el estudiante), déjala tal cual. Solo cambia palabras inexistentes por su forma española obvia más cercana.
+
+            REGLAS ESTRICTAS:
+            1. Corrige ÚNICAMENTE palabras inexistentes en español con una corrección fonética obvia y mínima. Si hay varias opciones plausibles, elige la más probable según el tema y la conversación reciente.
+            2. No reescribas, no reordenes, no mejoras el estilo, no corrijas gramática ni concordancia. No añadas ni elimines palabras salvo la corrección mínima de un artefacto de transcripción.
+            3. Añade mayúsculas y signos de puntuación (¿, ?, ¡, !, ,, .). Usa signos de interrogación SOLO con palabras interrogativas explícitas (qué, cómo, cuándo, dónde, quién, por qué, cuál) o si la frase es indudablemente una pregunta; en caso de duda, usa punto final (.).
+            4. El resultado debe seguir siendo español. No traduzcas, no expliques gramática, no añadas comentarios, etiquetas ni formato de diálogo.
+            5. Devuelve EXCLUSIVAMENTE el texto corregido y puntuado, sin introducción.
+
+            EJEMPLO:
+            Tema: En el restaurante
+            Transcripción: quidando la mesa y queriendo un bino tinto
+            Salida: Quedando la mesa y queriendo un vino tinto.
         """.trimIndent()
 
         private const val USER_LABELS =

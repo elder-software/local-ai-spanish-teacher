@@ -1,7 +1,7 @@
 package com.eldersoftware.anytimespanish.di
 
 import android.content.Context
-import com.eldersoftware.anytimespanish.data.audio.MoonshineSpeechToTextManager
+import com.eldersoftware.anytimespanish.data.audio.SherpaOnnxSpeechToTextManager
 import com.eldersoftware.anytimespanish.data.audio.SpeechToTextEngine
 import com.eldersoftware.anytimespanish.data.audio.TextToSpeechManager
 import com.eldersoftware.anytimespanish.data.onboarding.OnboardingPreferences
@@ -17,7 +17,8 @@ class AppContainer(context: Context) {
 
 //    val speechToTextManager: SpeechToTextEngine = VoskSpeechToTextManager(appContext)
 //    val speechToTextManager: SpeechToTextEngine = WhisperSpeechToTextManager(appContext)
-    val speechToTextManager: SpeechToTextEngine = MoonshineSpeechToTextManager(appContext)
+//    val speechToTextManager: SpeechToTextEngine = MoonshineSpeechToTextManager(appContext)
+    val speechToTextManager: SpeechToTextEngine = SherpaOnnxSpeechToTextManager(appContext)
     val textToSpeechManager = TextToSpeechManager(appContext)
     val feedbackSessionStore = FeedbackSessionStore()
     val gemmaLlmRepository = GemmaLlmRepository(appContext)

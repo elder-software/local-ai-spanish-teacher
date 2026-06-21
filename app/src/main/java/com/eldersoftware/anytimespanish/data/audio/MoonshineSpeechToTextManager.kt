@@ -20,13 +20,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Consumer
 import kotlin.math.sqrt
 
-class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextEngine {
+class MoonshineSpeechToTextManager(context: Context) : SpeechToTextEngine {
     private val audioRecorder = AudioRecorder(context)
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -35,7 +35,6 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
     private val modelDir = File(context.filesDir, "moonshine/spanish-base")
     private var cachedTranscriber: Transcriber? = null
-    private var activeTranscriber: Transcriber? = null
     private var onStopRequested: (() -> Unit)? = null
 
     override fun hasRecordPermission(): Boolean = audioRecorder.hasRecordPermission()
@@ -64,17 +63,16 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
         try {
             val transcriber = getOrCreateTranscriber()
-            activeTranscriber = transcriber
 
             var confirmedText = ""
             var currentLineText = ""
-            var lastEmittedText = ""
+            val lastEmittedText = ""
             // A line is "active" once Moonshine starts decoding speech and until it reports the
             // line as completed. stop() flushes any active line, so we wait for that completion
             // event to emit the final, settled transcript instead of guessing with a timer.
             var lineActive = false
             var finalizing = false
-            var finalized = false
+            val finalized = false
             // Completed when the flushed line reports completion after stop(), so the finalizer
             // wakes the moment the transcript settles rather than waiting for a fixed timer.
             val lineCompletionSignal = CompletableDeferred<Unit>()
@@ -82,19 +80,30 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
             // Bridges the capture thread (AudioRecorder) to the inference thread. We must not run
             // Moonshine inference inline in the mic callback: addAudio() blocks on JNI decoding,
             // and stalling the capture loop would drop microphone samples. So the callback only
-            // enqueues PCM and a dedicated feed thread coalesces and submits it.
-            val audioQueue = ConcurrentLinkedQueue<FloatArray>()
+            // enqueues PCM and a dedicated feed thread coalesces and submits it. A blocking queue
+            // lets the feed thread park until samples arrive instead of busy-polling on a timer,
+            // which keeps streaming-decode latency to a minimum.
+            val audioQueue = LinkedBlockingQueue<FloatArray>()
             val feeding = AtomicBoolean(true)
 
-            fun drainQueuedAudio(): FloatArray {
+            fun drainQueuedAudio(timeoutMs: Long = 0): FloatArray {
+                // Block up to timeoutMs for the first chunk (so the feed thread can sleep without
+                // busy-polling), then drain everything else that is immediately available and merge
+                // it into a single contiguous buffer for one addAudio() call. A zero timeout is a
+                // non-blocking drain used during finalization after the feed thread has joined.
+                val first = if (timeoutMs > 0) {
+                    audioQueue.poll(timeoutMs, TimeUnit.MILLISECONDS)
+                } else {
+                    audioQueue.poll()
+                } ?: return EMPTY_AUDIO
                 val chunks = ArrayList<FloatArray>()
-                var total = 0
+                chunks.add(first)
+                var total = first.size
                 while (true) {
                     val chunk = audioQueue.poll() ?: break
                     chunks.add(chunk)
                     total += chunk.size
                 }
-                if (total == 0) return EMPTY_AUDIO
                 val merged = FloatArray(total)
                 var offset = 0
                 for (chunk in chunks) {
@@ -106,7 +115,6 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
             fun emitFinalAndClose(finalText: String) {
                 if (finalized) return
-                finalized = true
                 trySend(SttEvent.Final(finalText))
                 close()
             }
@@ -125,7 +133,6 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
                             .filter { it.isNotBlank() }
                             .joinToString(" ")
                         if (displayText.isNotEmpty() && displayText != lastEmittedText) {
-                            lastEmittedText = displayText
                             trySend(SttEvent.Partial(displayText))
                         }
                     }
@@ -157,16 +164,16 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
             val feedThread = Thread {
                 while (feeding.get()) {
-                    val audio = drainQueuedAudio()
-                    if (audio.isEmpty()) {
-                        try {
-                            Thread.sleep(FEED_IDLE_SLEEP_MS)
-                        } catch (e: InterruptedException) {
-                            Thread.currentThread().interrupt()
-                            break
-                        }
-                        continue
+                    // Blocks until samples arrive (or the poll times out), so the feed thread
+                    // never busy-waits. Interrupting the thread during finalization/unwind
+                    // unblocks the poll immediately.
+                    val audio = try {
+                        drainQueuedAudio(FEED_IDLE_POLL_MS)
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
                     }
+                    if (audio.isEmpty()) continue
                     try {
                         transcriber.addAudio(audio, AudioRecorder.SAMPLE_RATE)
                     } catch (e: Exception) {
@@ -180,18 +187,16 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
 
             onStopRequested = {
                 Log.d(TAG, "Stop requested, finalizing transcription")
-                // Runs on IO: feedThread.join and every transcriber call below block on JNI
-                // decoding, and the second-pass decode of the full utterance is the heaviest
-                // call in this file.
+                // Runs on IO: feedThread.join and transcriber.stop() block on JNI decoding.
                 launch(Dispatchers.IO) {
-                    // Stop capture first so no further chunks are enqueued, then drain whatever is
-                    // left, halt the feed thread, and only then flush the stream. Joining the feed
-                    // thread before stop() guarantees addAudio() and stop() never touch the stream
-                    // concurrently. The returned PCM is the complete utterance (silence-trimmed),
-                    // kept for the second decoding pass below.
-                    val fullUtterancePcm = audioRecorder
-                        .stopAndGetRawPcm(maxDurationMs = FULL_UTTERANCE_MAX_MS)
-                        .getOrNull()
+                    // Stop capture first so no further chunks are enqueued, then halt the feed
+                    // thread and only then flush the stream. Joining the feed thread before
+                    // stop() guarantees addAudio() and stop() never touch the stream
+                    // concurrently. We discard the PCM: streaming already decoded the audio
+                    // incrementally as the user spoke, and a second full-utterance re-decode
+                    // would only re-do that work on the critical path. Residual ASR errors are
+                    // corrected downstream by the LLM correction pass instead.
+                    audioRecorder.stopAndDiscard()
                     feeding.set(false)
                     feedThread.interrupt()
                     feedThread.join(FEED_JOIN_TIMEOUT_MS)
@@ -216,25 +221,12 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
                             ?: Log.w(TAG, "Timed out waiting for line completion; finalizing anyway")
                     }
 
-                    val streamingText = listOf(confirmedText, currentLineText)
+                    val finalText = listOf(confirmedText, currentLineText)
                         .filter { it.isNotBlank() }
                         .joinToString(" ")
                         .trim()
 
-                    // Second pass: re-decode the whole utterance in one shot. Streaming decodes
-                    // line by line (segmented by the internal VAD), so the model never sees full
-                    // context; a single non-streaming decode over the complete audio is more
-                    // accurate. The streaming text remains as a fallback if this pass fails.
-                    val refinedText = fullUtterancePcm?.let { pcm ->
-                        try {
-                            transcribeFullUtterance(transcriber, pcm)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Full-utterance re-decode failed, using streaming text", e)
-                            null
-                        }
-                    }
-
-                    emitFinalAndClose(refinedText?.takeIf { it.isNotBlank() } ?: streamingText)
+                    emitFinalAndClose(finalText)
                 }
             }
 
@@ -259,31 +251,12 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
                 feedThread.interrupt()
                 audioRecorder.cancel()
                 transcriber.removeListener(listener)
-                activeTranscriber = null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start transcription", e)
             trySend(SttEvent.Failure("Failed to start STT: ${e.message}"))
             close()
         }
-    }
-
-    /**
-     * Decodes the complete utterance in a single non-streaming pass and returns the joined
-     * transcript, or null when there is nothing to decode. [Transcriber.transcribeWithoutStreaming]
-     * is synchronous and does not touch the streaming state or notify listeners, so it is safe to
-     * call on the shared transcriber once the stream has been stopped and the feed thread joined.
-     */
-    private fun transcribeFullUtterance(transcriber: Transcriber, pcm: ByteArray): String? {
-        val audio = pcm16ToFloat(pcm)
-        if (audio.isEmpty()) return null
-        val transcript = transcriber.transcribeWithoutStreaming(audio, AudioRecorder.SAMPLE_RATE)
-            ?: return null
-        return transcript.lines
-            .mapNotNull { it.text?.trim() }
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
-            .ifBlank { null }
     }
 
     @Synchronized
@@ -424,13 +397,11 @@ class MoonshineSpeechToTextManager(private val context: Context) : SpeechToTextE
         private val EMPTY_AUDIO = FloatArray(0)
         // Upper bound on how long to wait for the final line-completion event after stop().
         private const val FINALIZE_TIMEOUT_MS = 2_000L
-        // How long the feed thread parks when no audio is queued before checking again.
-        private const val FEED_IDLE_SLEEP_MS = 20L
+        // How long the feed thread blocks waiting for audio before looping to re-check `feeding`.
+        // Only a backstop: interrupting the feed thread during unwind wakes the poll immediately.
+        private const val FEED_IDLE_POLL_MS = 500L
         // Upper bound on joining the feed thread during finalization.
         private const val FEED_JOIN_TIMEOUT_MS = 1_000L
-        // Cap on the audio kept for the second (full-utterance) decoding pass. Much higher than
-        // the trimmer's default 8s so long answers are not truncated before re-decoding.
-        private const val FULL_UTTERANCE_MAX_MS = 120_000
         private const val MODEL_BASE_URL = "https://download.moonshine.ai/model/base-es/quantized/base-es"
         private const val ENCODER_URL = "$MODEL_BASE_URL/encoder_model.ort"
         private const val DECODER_URL = "$MODEL_BASE_URL/decoder_model_merged.ort"

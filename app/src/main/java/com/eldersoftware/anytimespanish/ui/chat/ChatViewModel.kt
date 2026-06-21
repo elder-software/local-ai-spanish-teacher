@@ -127,13 +127,6 @@ class ChatViewModel(
         }
     }
 
-    fun dismissSuggestion() {
-        suggestionJob?.cancel()
-        suggestionJob = null
-        val state = _uiState.value as? ChatUiState.ActiveConversation ?: return
-        _uiState.value = clearSuggestion(state)
-    }
-
     fun toggleRecording() {
         val state = _uiState.value
         if (state !is ChatUiState.ActiveConversation || state.isGenerating || state.isTranscribing) return
@@ -367,6 +360,10 @@ class ChatViewModel(
             interimTranscript = null,
             errorMessage = message,
         )
+        // A Failure is terminal for this recognition session, but the manager leaves the flow
+        // open. Cancel the collector so the flow's awaitClose tears down the recorder and feed
+        // thread; otherwise recognitionJob stays active and blocks the next recording attempt.
+        recognitionJob?.cancel()
     }
 
     private fun respondToTranscript(transcript: String) {
@@ -383,10 +380,13 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            val normalizedSpokenText = spokenText
-//            val normalizedSpokenText = runCatching {
-//                llmRepository.punctuateTranscript(spokenText)
-//            }.getOrDefault(spokenText).trim()
+            val normalizedSpokenText = runCatching {
+                llmRepository.correctTranscript(
+                    transcript = spokenText,
+                    topicTitle = state.currentTopic,
+                    conversationContext = formatConversationContext(state.messages),
+                )
+            }.getOrDefault(spokenText).trim()
 
             val userMessage = ChatMessage(
                 content = normalizedSpokenText,
@@ -407,7 +407,7 @@ class ChatViewModel(
             )
 
             val assistantMessageId = ChatMessage(isUser = false, content = "").id
-            var assistantText = StringBuilder()
+            val assistantText = StringBuilder()
             val speechBuffer = StringBuilder()
 
             streamParser.reset()
@@ -424,7 +424,6 @@ class ChatViewModel(
                                 assistantText.append(visible)
                                 speechBuffer.append(visible)
                                 updateAssistantMessage(
-                                    messagesWithUser,
                                     assistantMessageId,
                                     assistantText.toString(),
                                 )
@@ -446,14 +445,13 @@ class ChatViewModel(
                     if (e is kotlinx.coroutines.CancellationException) throw e
                     updateActiveError(messagesWithUser, e.message ?: "Could not generate a response")
                 } finally {
-                    clearGenerating(messagesWithUser, assistantMessageId, assistantText.toString())
+                    clearGenerating(assistantMessageId, assistantText.toString())
                 }
             }
         }
     }
 
     private fun updateAssistantMessage(
-        baseMessages: List<ChatMessage>,
         assistantId: String,
         content: String,
     ) {
@@ -464,7 +462,6 @@ class ChatViewModel(
     }
 
     private fun clearGenerating(
-        baseMessages: List<ChatMessage>,
         assistantId: String,
         finalContent: String,
     ) {

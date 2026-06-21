@@ -42,6 +42,18 @@ interface LlmRepository {
 
     suspend fun punctuateTranscript(transcript: String): String
 
+    /**
+     * Corrects obvious speech-recognition errors in [transcript] (e.g. non-words produced by
+     * the small ASR model, such as "quidando" → "quedando") and adds punctuation, using the
+     * [topicTitle] and [conversationContext] to disambiguate. Intended learner errors in grammar
+     * or vocabulary are preserved — only machine-transcription artifacts are fixed.
+     */
+    suspend fun correctTranscript(
+        transcript: String,
+        topicTitle: String,
+        conversationContext: String,
+    ): String
+
     suspend fun generateNextReplySuggestion(
         topicTitle: String,
         conversationContext: String,
