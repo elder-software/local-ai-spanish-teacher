@@ -22,7 +22,7 @@ android {
         applicationId = "com.eldersoftware.anytimespanish"
         minSdk = 35
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.vosk.android)
     implementation(libs.whisper.android)
     implementation(libs.moonshine.voice)
+    implementation(files("libs/sherpa-onnx-1.12.21.aar"))
     implementation(libs.revenuecat.purchases)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

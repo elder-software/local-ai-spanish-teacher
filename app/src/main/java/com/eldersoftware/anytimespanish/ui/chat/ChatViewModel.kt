@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class ChatViewModel(
-    private val topic: ConversationTopic,
+    topic: ConversationTopic,
     private val llmRepository: LlmRepository,
     private val speechToTextManager: SpeechToTextEngine,
     private val textToSpeechManager: TextToSpeechManager,
